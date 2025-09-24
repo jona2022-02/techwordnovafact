@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Función helper para verificar si el usuario es admin
+    function isAdmin() {
+      return request.auth != null && 
+             ('role' in resource.data && resource.data.role == 'admin' ||
+              'role' in request.auth.token && request.auth.token.role == 'admin');
+    }
+    
+    // Función helper para verificar autenticación
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Función helper para verificar si es el propio usuario
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Usuarios - pueden leer/escribir su propia info, admins pueden todo
+    match /users/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated();
+    }
+    
+    // Configuración pública de membresías
+    match /membershipSettings/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Planes de marketing - lectura pública
+    match /marketing_plans/{document=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Roles y permisos - solo admins
+    match /roles/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    match /permissions/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Procesos DTEs - usuarios pueden sus propios datos
+    match /procesosDte/{userId}/{document=**} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // Auditoría - solo admins pueden leer
+    match /auditLogs/{document=**} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+    }
+    
+    // Solicitudes de membresía
+    match /membershipRequests/{document=**} {
+      allow read, create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+    
+    // Membresías activas
+    match /memberships/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}
