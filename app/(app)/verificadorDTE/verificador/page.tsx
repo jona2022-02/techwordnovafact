@@ -139,7 +139,21 @@ export default function VerificadorPage() {
       return
     }
     setLoading(true)
-    setMsg('Procesando…')
+    
+    // Mensaje más informativo basado en la cantidad de archivos
+    const totalSize = selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0)
+    const sizeText = totalSize > 1024 * 1024 
+      ? `${(totalSize / (1024 * 1024)).toFixed(1)} MB` 
+      : `${(totalSize / 1024).toFixed(1)} KB`
+    
+    if (selectedFiles.length === 1) {
+      setMsg(`Procesando archivo: ${selectedFiles[0].name}...`)
+    } else if (selectedFiles.length <= 5) {
+      setMsg(`Procesando ${selectedFiles.length} archivos (${sizeText})...`)
+    } else {
+      setMsg(`Procesando ${selectedFiles.length} archivos por lotes optimizado (${sizeText})...`)
+    }
+    
     setData([])
     setDownloadHref(null)
     setCurrentPage(1)
@@ -223,7 +237,15 @@ export default function VerificadorPage() {
         console.warn('⚠️ Usuario no autenticado - No se guardará el proceso')
       }
 
-      setMsg('✅ Procesamiento finalizado. Revisa la tabla y descarga el Excel.')
+      // Mensaje final mejorado con estadísticas
+      const tiempoTotal = ((duracionMs) / 1000).toFixed(1)
+      const resumenMsg = selectedFiles.length === 1 
+        ? `✅ Procesamiento completado en ${tiempoTotal}s. ${resultados.length} documentos verificados.`
+        : selectedFiles.length <= 5
+        ? `✅ ${selectedFiles.length} archivos procesados en ${tiempoTotal}s. ${resultados.length} documentos verificados.`
+        : `✅ ${selectedFiles.length} archivos procesados por lotes en ${tiempoTotal}s. ${resultados.length} documentos verificados. Emitidos: ${emitidos}, Errores: ${errores}.`
+      
+      setMsg(resumenMsg)
     } catch (e: any) {
       const duracionMs = Date.now() - inicioTiempo
 
@@ -460,25 +482,106 @@ export default function VerificadorPage() {
               </div>
             </div>
 
-            {/* Lista de archivos seleccionados */}
+            {/* Lista mejorada de archivos seleccionados */}
             {selectedFiles.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium">Archivos seleccionados ({selectedFiles.length})</h4>
-                <div className="flex flex-wrap gap-2">
-                  {selectedFiles.map(f => (
-                    <Badge key={f.name} variant="outline" className="pl-3 pr-1">
-                      <span className="mr-2">{f.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeFile(f.name)}
-                        className="rounded-sm hover:bg-muted p-0.5"
-                        disabled={loading}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium flex items-center gap-2">
+                    <Database className="w-4 h-4" />
+                    Archivos seleccionados ({selectedFiles.length})
+                  </h4>
+                  {selectedFiles.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedFiles([])}
+                      disabled={loading}
+                      className="h-7 px-2 text-xs"
+                    >
+                      <X className="w-3 h-3 mr-1" />
+                      Limpiar todo
+                    </Button>
+                  )}
                 </div>
+
+                {/* Vista compacta para pocos archivos */}
+                {selectedFiles.length <= 3 && (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedFiles.map(f => (
+                      <Badge key={f.name} variant="outline" className="pl-3 pr-1 max-w-xs">
+                        <span className="mr-2 truncate">{f.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(f.name)}
+                          className="rounded-sm hover:bg-muted p-0.5"
+                          disabled={loading}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
+                {/* Vista detallada para muchos archivos */}
+                {selectedFiles.length > 3 && (
+                  <div className="border rounded-lg bg-muted/30 divide-y">
+                    <div className="p-3">
+                      <div className="grid grid-cols-3 gap-4 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        <div>Archivo</div>
+                        <div>Tamaño</div>
+                        <div>Acción</div>
+                      </div>
+                    </div>
+                    <div className="max-h-32 overflow-y-auto">
+                      {selectedFiles.map((f, index) => (
+                        <div key={f.name} className="p-3 flex items-center justify-between hover:bg-muted/50 transition-colors">
+                          <div className="grid grid-cols-3 gap-4 flex-1 items-center">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                              <span className="text-sm truncate" title={f.name}>
+                                {f.name}
+                              </span>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {f.size ? (
+                                f.size < 1024 ? `${f.size} B` :
+                                f.size < 1024 * 1024 ? `${(f.size / 1024).toFixed(1)} KB` :
+                                `${(f.size / (1024 * 1024)).toFixed(1)} MB`
+                              ) : 'N/A'}
+                            </div>
+                            <div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeFile(f.name)}
+                                disabled={loading}
+                                className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-3 bg-muted/50">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>
+                          Total: {selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0) < 1024 * 1024 
+                            ? `${(selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0) / 1024).toFixed(1)} KB`
+                            : `${(selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0) / (1024 * 1024)).toFixed(1)} MB`
+                          }
+                        </span>
+                        <span>
+                          Límite: 150 consultas máximo
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -528,70 +631,143 @@ export default function VerificadorPage() {
         </CardContent>
       </Card>
 
-      {/* Statistics Cards */}
+      {/* Statistics Cards Mejoradas */}
       {data.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <Database className="w-4 h-4 text-blue-500" />
-                <div className="space-y-1">
-                  <p className="text-2xl font-bold">{stats.total}</p>
-                  <p className="text-xs text-muted-foreground">Total</p>
+        <div className="space-y-4">
+          {/* Información del procesamiento por lotes (cuando aplica) */}
+          {data.length >= 50 && (
+            <Card className="bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <Activity className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div className="space-y-2 flex-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-medium text-blue-900 dark:text-blue-100">
+                        Procesamiento por Lotes Optimizado
+                      </h3>
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-300">
+                        {data.length} consultas
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div className="space-y-1">
+                        <p className="text-blue-800 dark:text-blue-200 font-medium">Archivos procesados</p>
+                        <p className="text-blue-600 dark:text-blue-400">{selectedFiles.length} archivos CSV</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-blue-800 dark:text-blue-200 font-medium">Método utilizado</p>
+                        <p className="text-blue-600 dark:text-blue-400">Lotes de 15 consultas</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-blue-800 dark:text-blue-200 font-medium">Tiempo estimado</p>
+                        <p className="text-blue-600 dark:text-blue-400">{Math.ceil(data.length / 15) * 2} segundos aprox.</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-500" />
-                <div className="space-y-1">
-                  <p className="text-2xl font-bold text-green-600">{stats.emitidos}</p>
-                  <p className="text-xs text-muted-foreground">Emitidos</p>
+          {/* Estadísticas principales */}
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-blue-500" />
+                  <div className="space-y-1">
+                    <p className="text-2xl font-bold">{stats.total}</p>
+                    <p className="text-xs text-muted-foreground">Total procesados</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <XCircle className="w-4 h-4 text-red-500" />
-                <div className="space-y-1">
-                  <p className="text-2xl font-bold text-red-600">{stats.rechazados}</p>
-                  <p className="text-xs text-muted-foreground">Rechazados</p>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <div className="space-y-1">
+                    <p className="text-2xl font-bold text-green-600">{stats.emitidos}</p>
+                    <p className="text-xs text-muted-foreground">Emitidos</p>
+                    {stats.total > 0 && (
+                      <p className="text-xs text-green-500">
+                        {((stats.emitidos / stats.total) * 100).toFixed(1)}%
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                <div className="space-y-1">
-                  <p className="text-2xl font-bold text-yellow-600">{stats.anulados}</p>
-                  <p className="text-xs text-muted-foreground">Anulados</p>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <XCircle className="w-4 h-4 text-red-500" />
+                  <div className="space-y-1">
+                    <p className="text-2xl font-bold text-red-600">{stats.rechazados}</p>
+                    <p className="text-xs text-muted-foreground">Rechazados</p>
+                    {stats.total > 0 && (
+                      <p className="text-xs text-red-500">
+                        {((stats.rechazados / stats.total) * 100).toFixed(1)}%
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-orange-500" />
-                <div className="space-y-1">
-                  <p className="text-2xl font-bold text-orange-600">{stats.errores}</p>
-                  <p className="text-xs text-muted-foreground">Errores</p>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                  <div className="space-y-1">
+                    <p className="text-2xl font-bold text-yellow-600">{stats.anulados}</p>
+                    <p className="text-xs text-muted-foreground">Anulados</p>
+                    {stats.total > 0 && (
+                      <p className="text-xs text-yellow-500">
+                        {((stats.anulados / stats.total) * 100).toFixed(1)}%
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <XCircle className="w-4 h-4 text-purple-500" />
+                  <div className="space-y-1">
+                    <p className="text-2xl font-bold text-purple-600">{stats.invalidados}</p>
+                    <p className="text-xs text-muted-foreground">Invalidados</p>
+                    {stats.total > 0 && (
+                      <p className="text-xs text-purple-500">
+                        {((stats.invalidados / stats.total) * 100).toFixed(1)}%
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-orange-500" />
+                  <div className="space-y-1">
+                    <p className="text-2xl font-bold text-orange-600">{stats.errores}</p>
+                    <p className="text-xs text-muted-foreground">Errores</p>
+                    {stats.total > 0 && (
+                      <p className="text-xs text-orange-500">
+                        {((stats.errores / stats.total) * 100).toFixed(1)}%
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       )}
 

@@ -20,6 +20,7 @@ import {
 import { BarChart, FileText, Settings, ChevronDown, ArrowRight, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { motion, type Variants } from 'framer-motion';
+import MembershipCard from '@/components/membership/MembershipCard';
 
 // Animaciones
 const container: Variants = {
@@ -42,6 +43,8 @@ export default function HomePage() {
   const email = user?.email ?? '';
 
   useEffect(() => {
+    if (!auth) return;
+    
     const unsub = onAuthStateChanged(auth, setUser);
     return () => unsub();
   }, []);
@@ -81,6 +84,11 @@ export default function HomePage() {
               </Button>
             </Link>
           </div>
+        </motion.section>
+
+        {/* Membership Status */}
+        <motion.section variants={item}>
+          <MembershipCard />
         </motion.section>
 
         {/* Sync Button */}

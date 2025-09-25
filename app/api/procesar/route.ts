@@ -1,6 +1,7 @@
 // app/api/procesar/route.ts
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Aumentado para procesamiento por lotes
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
@@ -213,13 +214,13 @@ async function optimizarPagina(page: Page) {
   });
   await page.setExtraHTTPHeaders({ 'Accept-Language': 'es-SV,es;q=0.9,en;q=0.8' });
   await page.setViewportSize({ width: 1280, height: 900 });
-  page.setDefaultTimeout(20000);
-  page.setDefaultNavigationTimeout(20000);
+  page.setDefaultTimeout(12000); // Reducido de 20s a 12s
+  page.setDefaultNavigationTimeout(12000);
 }
 
 async function getResultadoScope(page: Page): Promise<{ html: string, frame?: Frame }> {
   try {
-    await page.waitForSelector('text=/Estado\\s+del\\s+documento/i', { timeout: 6000 });
+    await page.waitForSelector('text=/Estado\\s+del\\s+documento/i', { timeout: 4000 }); // Reducido de 6s a 4s
     return { html: await page.content(), frame: undefined };
   } catch {}
   for (const f of page.frames()) {
@@ -238,7 +239,7 @@ async function consultarConClick(page: Page, rawUrl: string) {
   const { host, ambiente, codGen, fechaEmi } = extraerParametros(url);
   const t0 = Date.now();
   try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 12000 }); // Reducido de 20s a 12s
 
     let hizoClick = false;
     const intentos = [
@@ -255,7 +256,7 @@ async function consultarConClick(page: Page, rawUrl: string) {
       }
     }
 
-    await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {}); // Reducido de 8s a 5s
     const { html } = await getResultadoScope(page);
 
     const pares = paresDesdeHtml(html);
@@ -321,7 +322,83 @@ async function launchBrowser(): Promise<Browser> {
   }
 }
 
-// Pool de páginas concurrentes (baja para plan Hobby)
+// ✅ NUEVO: Procesamiento por lotes optimizado para 150 consultas
+const LOTE_SIZE = 15; // Procesar de 15 en 15
+const DELAY_ENTRE_LOTES = 2000; // 2 segundos entre lotes
+const CONCURRENCIA_POR_LOTE = 3; // 3 páginas simultáneas por lote
+
+// Procesar un lote de enlaces
+async function procesarLote(ctx: BrowserContext, lote: string[], numerolote: number) {
+  console.log(`📦 Procesando lote ${numerolote} (${lote.length} enlaces)`);
+  const resultados: any[] = [];
+  const workers: Promise<void>[] = [];
+
+  for (let i = 0; i < Math.min(CONCURRENCIA_POR_LOTE, lote.length); i++) {
+    workers.push((async () => {
+      const page = await ctx.newPage();
+      await optimizarPagina(page);
+      
+      // Procesar URLs asignadas a este worker
+      const urlsWorker = lote.filter((_, index) => index % CONCURRENCIA_POR_LOTE === i);
+      
+      for (const url of urlsWorker) {
+        try {
+          const resultado = await consultarConClick(page, url);
+          resultados.push(resultado);
+        } catch (err) {
+          resultados.push({
+            url: url,
+            linkVisita: sanitizarUrl(url),
+            visitar: 'Abrir',
+            estado: 'ERROR',
+            tipoDte: '',
+            tipoDteNorm: 'SIN_TIPO',
+            relacionados: [],
+            error: (err as any)?.message || String(err),
+          });
+        }
+        
+        // Pequeña pausa entre consultas
+        await page.waitForTimeout(300);
+      }
+      
+      await page.close();
+    })());
+  }
+
+  await Promise.all(workers);
+  return resultados;
+}
+
+// Función principal para procesar por lotes
+async function procesarEnlacesPorLotes(ctx: BrowserContext, links: string[]) {
+  const todosResultados: any[] = [];
+  const lotes = [];
+  
+  // Dividir en lotes
+  for (let i = 0; i < links.length; i += LOTE_SIZE) {
+    lotes.push(links.slice(i, i + LOTE_SIZE));
+  }
+
+  console.log(`🚀 Procesando ${links.length} enlaces en ${lotes.length} lotes de máximo ${LOTE_SIZE} cada uno`);
+
+  // Procesar cada lote secuencialmente
+  for (let i = 0; i < lotes.length; i++) {
+    const lote = lotes[i];
+    const resultados = await procesarLote(ctx, lote, i + 1);
+    todosResultados.push(...resultados);
+    
+    // Pausa entre lotes para no saturar el servidor
+    if (i < lotes.length - 1) {
+      console.log(`⏸️ Pausa de ${DELAY_ENTRE_LOTES}ms antes del siguiente lote...`);
+      await new Promise(resolve => setTimeout(resolve, DELAY_ENTRE_LOTES));
+    }
+  }
+
+  return todosResultados;
+}
+
+// Pool de páginas concurrentes (función anterior mantenida para compatibilidad)
 async function procesarEnlacesConPool(ctx: BrowserContext, links: string[], concurrencia = 2) {
   const resultados: any[] = [];
   const cola = links.slice();
@@ -334,11 +411,8 @@ async function procesarEnlacesConPool(ctx: BrowserContext, links: string[], conc
       while (cola.length) {
         const raw = cola.shift()!;
         try {
-          let r = await consultarConClick(page, raw);
-          if (r.estado === 'ERROR' || r.estado === 'DESCONOCIDO') {
-            await page.waitForTimeout(600);
-            r = await consultarConClick(page, raw);
-          }
+          // Intentar solo una vez para evitar timeouts
+          const r = await consultarConClick(page, raw);
           resultados.push(r);
         } catch (err) {
           resultados.push({
@@ -352,7 +426,8 @@ async function procesarEnlacesConPool(ctx: BrowserContext, links: string[], conc
             error: (err as any)?.message || String(err),
           });
         }
-        await page.waitForTimeout(200);
+        // Reducir tiempo de espera entre consultas
+        await page.waitForTimeout(100);
       }
       await page.close();
     })());
@@ -469,16 +544,29 @@ export async function POST(req: NextRequest) {
         });
       }
       return new Response('No se encontraron URLs válidas en los CSV.', { status: 400 });
-    }  const concurrencia = 2; // baja para Hobby
+    }
+
+    // ✅ NUEVO: Límite de 150 enlaces con procesamiento por lotes
+    const MAX_ENLACES_PERMITIDOS = 150;
+    
+    if (links.length > MAX_ENLACES_PERMITIDOS) {
+      return new Response(`Demasiados enlaces. Máximo permitido: ${MAX_ENLACES_PERMITIDOS}, encontrados: ${links.length}`, { status: 400 });
+    }
+
+    console.log(`📊 Iniciando procesamiento de ${links.length} enlaces por lotes optimizado`);
+    
   let browser: Browser | null = null;
   let resultados: any[] = [];
 
   try {
     browser = await launchBrowser();
     const ctx = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) NovaFact/1.0 Chrome Safari',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 NovaFactVerificador/2.0',
     });
-    resultados = await procesarEnlacesConPool(ctx, links, concurrencia);
+
+    // ✅ NUEVO: Usar procesamiento por lotes optimizado
+    resultados = await procesarEnlacesPorLotes(ctx, links);
+
     await ctx.close();
   } finally {
     if (browser) await browser.close();
@@ -541,6 +629,11 @@ export async function POST(req: NextRequest) {
   const payloadBase = {
     filename,
     total: resultados.length,
+    totalOriginal: links.length, // Total de enlaces encontrados
+    procesados: resultados.length, // Enlaces realmente procesados
+    procesadoPorLotes: true, // Indicador de que se usó procesamiento por lotes
+    loteSize: LOTE_SIZE,
+    tiempoTotal: ((Date.now() - startTime) / 1000).toFixed(2) + 's',
     resultados, // <--- clave para que la tabla se llene en el front
   };
 
@@ -586,7 +679,10 @@ export async function POST(req: NextRequest) {
       userAgent: req.headers.get('user-agent') || undefined,
       metadata: {
         totalLinks: links.length,
-        concurrencia,
+        linksProcessed: resultados.length,
+        procesadoPorLotes: true,
+        loteSize: LOTE_SIZE,
+        numeroLotes: Math.ceil(links.length / LOTE_SIZE),
         tiposUnicos: [...new Set(resultados.map(r => r.tipoDte))],
         estadosUnicos: [...new Set(resultados.map(r => r.estado))]
       }

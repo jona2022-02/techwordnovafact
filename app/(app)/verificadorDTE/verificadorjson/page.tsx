@@ -126,7 +126,21 @@ export default function VerificadorJSONPage() {
     }
 
     setLoading(true)
-    setMsg('⏳ Procesando archivos JSON...')
+    
+    // Mensaje más informativo para archivos JSON
+    const totalSize = selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0)
+    const sizeText = totalSize > 1024 * 1024 
+      ? `${(totalSize / (1024 * 1024)).toFixed(1)} MB` 
+      : `${(totalSize / 1024).toFixed(1)} KB`
+    
+    if (selectedFiles.length === 1) {
+      setMsg(`⏳ Procesando archivo JSON: ${selectedFiles[0].name}...`)
+    } else if (selectedFiles.length <= 5) {
+      setMsg(`⏳ Procesando ${selectedFiles.length} archivos JSON (${sizeText})...`)
+    } else {
+      setMsg(`⏳ Procesando ${selectedFiles.length} archivos JSON por lotes optimizado (${sizeText})...`)
+    }
+    
     setData([])
     setDownloadHref(null)
     setCurrentPage(1)
@@ -168,11 +182,6 @@ export default function VerificadorJSONPage() {
       const rechazados = resultados.filter(r => r.estado === 'RECHAZADO').length
       const invalidados = resultados.filter(r => r.estado === 'INVALIDADO').length
       const errores = resultados.filter(r => r.error && r.error.trim() !== '').length
-      const montoTotal = resultados.reduce((sum, r) => {
-        const montoStr = r.montoTotal || '0'
-        const monto = parseFloat(montoStr.replace(/[^0-9.-]/g, ''))
-        return sum + (isNaN(monto) ? 0 : monto)
-      }, 0)
 
       // Guardar el proceso en la base de datos si el usuario está autenticado
       if (user && firebaseUser) {
@@ -187,8 +196,7 @@ export default function VerificadorJSONPage() {
               anulados,
               rechazados,
               invalidados,
-              errores,
-              montoTotal
+              errores
             },
             duracionMs,
             exito: true,
@@ -216,7 +224,18 @@ export default function VerificadorJSONPage() {
         }
       }
 
-      setMsg('✅ Procesamiento completado exitosamente')
+      // Mensaje final mejorado con estadísticas para JSON
+      const tiempoTotal = ((duracionMs) / 1000).toFixed(1)
+      const emitidosMsg = resultados.filter(r => r.estado === 'EMITIDO').length
+      const erroresMsg = resultados.filter(r => r.error && r.error.trim() !== '').length
+      
+      const resumenMsg = selectedFiles.length === 1 
+        ? `✅ Archivo JSON procesado en ${tiempoTotal}s. ${resultados.length} registros verificados.`
+        : selectedFiles.length <= 5
+        ? `✅ ${selectedFiles.length} archivos JSON procesados en ${tiempoTotal}s. ${resultados.length} registros verificados.`
+        : `✅ ${selectedFiles.length} archivos JSON procesados por lotes en ${tiempoTotal}s. ${resultados.length} registros verificados. Emitidos: ${emitidosMsg}, Errores: ${erroresMsg}.`
+      
+      setMsg(resumenMsg)
     } catch (e: any) {
       const duracionMs = Date.now() - inicioTiempo
       
@@ -449,14 +468,10 @@ export default function VerificadorJSONPage() {
     const emitidos = filtered.filter(r => r.estado === 'EMITIDO').length
     const rechazados = filtered.filter(r => r.estado === 'RECHAZADO').length
     const anulados = filtered.filter(r => r.estado === 'ANULADO').length
+    const invalidados = filtered.filter(r => r.estado === 'INVALIDADO').length
     const errores = filtered.filter(r => r.error).length
-    const montoTotal = filtered.reduce((sum, r) => {
-      const montoStr = r.montoTotal || '0'
-      const monto = parseFloat(montoStr.replace(/[^0-9.-]/g, '')) // Limpia caracteres no numéricos
-      return sum + (isNaN(monto) ? 0 : monto)
-    }, 0)
     
-    return { emitidos, rechazados, anulados, errores, montoTotal }
+    return { emitidos, rechazados, anulados, invalidados, errores, total: filtered.length }
   }, [filtered])
 
   const getEstadoBadgeVariant = (estado?: string) => {
@@ -529,25 +544,106 @@ export default function VerificadorJSONPage() {
               </div>
             </div>
 
-            {/* Lista de archivos seleccionados */}
+            {/* Lista mejorada de archivos JSON seleccionados */}
             {selectedFiles.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium">Archivos seleccionados ({selectedFiles.length})</h4>
-                <div className="flex flex-wrap gap-2">
-                  {selectedFiles.map(f => (
-                    <Badge key={f.name} variant="outline" className="pl-3 pr-1">
-                      <span className="mr-2">{f.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeFile(f.name)}
-                        className="rounded-sm hover:bg-muted p-0.5"
-                        disabled={loading}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium flex items-center gap-2">
+                    <Database className="w-4 h-4" />
+                    Archivos JSON seleccionados ({selectedFiles.length})
+                  </h4>
+                  {selectedFiles.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedFiles([])}
+                      disabled={loading}
+                      className="h-7 px-2 text-xs"
+                    >
+                      <X className="w-3 h-3 mr-1" />
+                      Limpiar todo
+                    </Button>
+                  )}
                 </div>
+
+                {/* Vista compacta para pocos archivos */}
+                {selectedFiles.length <= 3 && (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedFiles.map(f => (
+                      <Badge key={f.name} variant="outline" className="pl-3 pr-1 max-w-xs">
+                        <span className="mr-2 truncate">{f.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(f.name)}
+                          className="rounded-sm hover:bg-muted p-0.5"
+                          disabled={loading}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+
+                {/* Vista detallada para muchos archivos JSON */}
+                {selectedFiles.length > 3 && (
+                  <div className="border rounded-lg bg-muted/30 divide-y">
+                    <div className="p-3">
+                      <div className="grid grid-cols-3 gap-4 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        <div>Archivo JSON</div>
+                        <div>Tamaño</div>
+                        <div>Acción</div>
+                      </div>
+                    </div>
+                    <div className="max-h-32 overflow-y-auto">
+                      {selectedFiles.map((f, index) => (
+                        <div key={f.name} className="p-3 flex items-center justify-between hover:bg-muted/50 transition-colors">
+                          <div className="grid grid-cols-3 gap-4 flex-1 items-center">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                              <span className="text-sm truncate" title={f.name}>
+                                {f.name}
+                              </span>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {f.size ? (
+                                f.size < 1024 ? `${f.size} B` :
+                                f.size < 1024 * 1024 ? `${(f.size / 1024).toFixed(1)} KB` :
+                                `${(f.size / (1024 * 1024)).toFixed(1)} MB`
+                              ) : 'N/A'}
+                            </div>
+                            <div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeFile(f.name)}
+                                disabled={loading}
+                                className="h-7 w-7 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-3 bg-muted/50">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>
+                          Total: {selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0) < 1024 * 1024 
+                            ? `${(selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0) / 1024).toFixed(1)} KB`
+                            : `${(selectedFiles.reduce((acc, f) => acc + (f.size || 0), 0) / (1024 * 1024)).toFixed(1)} MB`
+                          }
+                        </span>
+                        <span>
+                          Límite: 150 consultas máximo
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -625,7 +721,7 @@ export default function VerificadorJSONPage() {
                 <Database className="w-4 h-4 text-blue-500" />
                 <div className="space-y-1">
                   <p className="text-2xl font-bold">{data.length}</p>
-                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="text-xs text-muted-foreground">Total DTE</p>
                 </div>
               </div>
             </CardContent>
@@ -637,7 +733,9 @@ export default function VerificadorJSONPage() {
                 <CheckCircle className="w-4 h-4 text-green-500" />
                 <div className="space-y-1">
                   <p className="text-2xl font-bold text-green-600">{stats.emitidos}</p>
-                  <p className="text-xs text-muted-foreground">Emitidos</p>
+                  <p className="text-xs text-muted-foreground">
+                    Emitidos ({data.length > 0 ? Math.round((stats.emitidos / data.length) * 100) : 0}%)
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -649,7 +747,9 @@ export default function VerificadorJSONPage() {
                 <XCircle className="w-4 h-4 text-red-500" />
                 <div className="space-y-1">
                   <p className="text-2xl font-bold text-red-600">{stats.rechazados}</p>
-                  <p className="text-xs text-muted-foreground">Rechazados</p>
+                  <p className="text-xs text-muted-foreground">
+                    Rechazados ({data.length > 0 ? Math.round((stats.rechazados / data.length) * 100) : 0}%)
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -661,7 +761,9 @@ export default function VerificadorJSONPage() {
                 <AlertCircle className="w-4 h-4 text-yellow-500" />
                 <div className="space-y-1">
                   <p className="text-2xl font-bold text-yellow-600">{stats.anulados}</p>
-                  <p className="text-xs text-muted-foreground">Anulados</p>
+                  <p className="text-xs text-muted-foreground">
+                    Anulados ({data.length > 0 ? Math.round((stats.anulados / data.length) * 100) : 0}%)
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -673,7 +775,9 @@ export default function VerificadorJSONPage() {
                 <AlertCircle className="w-4 h-4 text-orange-500" />
                 <div className="space-y-1">
                   <p className="text-2xl font-bold text-orange-600">{stats.errores}</p>
-                  <p className="text-xs text-muted-foreground">Errores</p>
+                  <p className="text-xs text-muted-foreground">
+                    Errores ({data.length > 0 ? Math.round((stats.errores / data.length) * 100) : 0}%)
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -682,12 +786,15 @@ export default function VerificadorJSONPage() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
-                <DollarSign className="w-4 h-4 text-emerald-500" />
+                <XCircle className="w-4 h-4 text-purple-500" />
                 <div className="space-y-1">
-                  <p className="text-lg font-bold text-emerald-600">
-                    ${stats.montoTotal.toLocaleString('es-SV', { minimumFractionDigits: 2 })}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Monto Total</p>
+                  <p className="text-2xl font-bold text-purple-600">{stats.invalidados}</p>
+                  <p className="text-xs text-muted-foreground">Invalidados</p>
+                  {stats.total > 0 && (
+                    <p className="text-xs text-purple-500">
+                      {((stats.invalidados / stats.total) * 100).toFixed(1)}%
+                    </p>
+                  )}
                 </div>
               </div>
             </CardContent>

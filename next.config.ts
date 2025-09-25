@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
   },
   // Configuración experimental para Edge Runtime
   experimental: {
-    serverComponentsExternalPackages: ["firebase-admin"]
+    // Configuraciones experimentales futuras aquí
   },
   // Configuración de webpack para manejar Node.js modules
   webpack: (config: any, { isServer }: { isServer: boolean }) => {

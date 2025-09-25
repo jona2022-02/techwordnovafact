@@ -1,6 +1,7 @@
 // app/api/verificararchjson/route.ts
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60; // Aumentado para procesamiento por lotes
 
 import { NextRequest, NextResponse } from 'next/server'
 import { Buffer } from 'buffer'
@@ -18,6 +19,42 @@ import {
   isProbableCodGen,
   buildWorkbook,
 } from '@/lib/dteCommon'
+
+// ✅ NUEVO: Configuración para procesamiento por lotes JSON
+const LOTE_SIZE_JSON = 15; // Procesar de 15 en 15 consultas JSON
+const DELAY_ENTRE_LOTES_JSON = 2000; // 2 segundos entre lotes
+const CONCURRENCIA_POR_LOTE_JSON = 3; // 3 páginas simultáneas por lote
+
+// ✅ NUEVO: Función para procesar filas por lotes (específica para JSON)
+async function procesarFilasPorLotes(ctx: any, filas: Fila[]) {
+  const todosResultados: any[] = [];
+  const lotes = [];
+  
+  // Dividir en lotes
+  for (let i = 0; i < filas.length; i += LOTE_SIZE_JSON) {
+    lotes.push(filas.slice(i, i + LOTE_SIZE_JSON));
+  }
+
+  console.log(`🚀 Procesando ${filas.length} consultas JSON en ${lotes.length} lotes de máximo ${LOTE_SIZE_JSON} cada uno`);
+
+  // Procesar cada lote secuencialmente
+  for (let i = 0; i < lotes.length; i++) {
+    const lote = lotes[i];
+    console.log(`📦 Procesando lote JSON ${i + 1} (${lote.length} consultas)`);
+    
+    // Usar la función existente pero con menos concurrencia para no saturar
+    const resultados = await procesarFilasConPool(ctx, lote, Math.min(CONCURRENCIA_POR_LOTE_JSON, lote.length));
+    todosResultados.push(...resultados);
+    
+    // Pausa entre lotes para no saturar el servidor
+    if (i < lotes.length - 1) {
+      console.log(`⏸️ Pausa de ${DELAY_ENTRE_LOTES_JSON}ms antes del siguiente lote JSON...`);
+      await new Promise(resolve => setTimeout(resolve, DELAY_ENTRE_LOTES_JSON));
+    }
+  }
+
+  return todosResultados;
+}
 
 // ------------------------- Tipos útiles -------------------------
 type Fila = { codGen: string; fechaYmd: string }
@@ -242,21 +279,33 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // 2) Consultar en Hacienda con Playwright (misma lógica que /api/verificarcodyfecha)
+  // ✅ NUEVO: Validar límite de 150 consultas para procesamiento por lotes
+  const MAX_CONSULTAS_PERMITIDAS = 150;
+  if (dedup.length > MAX_CONSULTAS_PERMITIDAS) {
+    return new Response(
+      `Demasiadas consultas. Máximo permitido: ${MAX_CONSULTAS_PERMITIDAS}, encontradas: ${dedup.length}`,
+      { status: 400 }
+    )
+  }
+
+  console.log(`📊 Iniciando procesamiento JSON de ${dedup.length} consultas por lotes optimizado`);
+
+  // 2) Consultar en Hacienda con Playwright - ✅ OPTIMIZADO para lotes
   let browser: any = null
   let resultados: Resultado[] = []
   try {
     browser = await launchBrowser()
     const ctx = await browser.newContext({
       userAgent:
-        'Mozilla/5.0 (X11; Linux x86_64) VerificadorDTE/1.0 Chrome Safari',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 NovaFactVerificadorJSON/2.0',
     })
     // Precalentar una página
     const p = await ctx.newPage()
     await optimizarPagina(p)
     await p.close()
 
-    const consultados = await procesarFilasConPool(ctx, dedup, 2)
+    // ✅ NUEVO: Usar procesamiento por lotes optimizado
+    const consultados = await procesarFilasPorLotes(ctx, dedup)
 
     // 2.1) MERGE: inyecta los campos emisor/receptor extraídos del JSON en cada resultado
     for (const r of consultados) {
@@ -280,7 +329,15 @@ export async function POST(req: NextRequest) {
   const contentType =
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
-  const payloadBase = { filename, total: resultados.length, resultados }
+  const payloadBase = { 
+    filename, 
+    total: resultados.length, 
+    totalOriginal: dedup.length,
+    procesadoPorLotes: true,
+    loteSize: LOTE_SIZE_JSON,
+    tiempoTotal: ((Date.now() - startTime) / 1000).toFixed(2) + 's',
+    resultados 
+  }
 
   // Preparar respuesta
   let response;
@@ -318,6 +375,9 @@ export async function POST(req: NextRequest) {
       metadata: {
         totalFilas: dedup.length,
         erroresJSON: errores.length,
+        procesadoPorLotes: true,
+        loteSize: LOTE_SIZE_JSON,
+        numeroLotes: Math.ceil(dedup.length / LOTE_SIZE_JSON),
         tiposUnicos: [...new Set(resultados.map((r: any) => r.tipoDte))],
         estadosUnicos: [...new Set(resultados.map((r: any) => r.estado))]
       }

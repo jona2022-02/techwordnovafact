@@ -187,7 +187,7 @@ export default function VerifyCodePage() {
 
           <div className="mt-8 space-y-4">
             <InfoChip text="Código de 6 dígitos" />
-            <InfoChip text="Válido por 10 minutos" />
+            <InfoChip text="Válido por 1 minuto" />
             <InfoChip text="Verificación instantánea" />
             <p className="max-w-md text-sm text-slate-300">
               Ingresa el código de 6 dígitos que enviamos a tu correo <span className="font-medium text-blue-200">{email}</span> para verificar tu cuenta.

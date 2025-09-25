@@ -19,6 +19,11 @@ function getSessionCookieValue(req: NextRequest) {
 export async function middleware(req: NextRequest) {
   const url = req.nextUrl.clone();
   
+  // TEMPORAL: Permitir acceso sin autenticación en desarrollo local
+  if (process.env.NODE_ENV === 'development' && url.hostname === 'localhost') {
+    return NextResponse.next();
+  }
+  
   // Permitir rutas públicas
   if (PUBLIC_PATHS.some(p => url.pathname.startsWith(p))) {
     return NextResponse.next();
