@@ -20,11 +20,30 @@ function loadServiceAccountFromRaw(raw?: string) {
       trimmed = trimmed.slice(1, -1);
     }
     
-    // Decodificar caracteres escapados
-    trimmed = trimmed.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    // Decodificar caracteres escapados más agresivamente
+    trimmed = trimmed
+      .replace(/\\n/g, '\n')
+      .replace(/\\"/g, '"')
+      .replace(/\\t/g, '\t')
+      .replace(/\\r/g, '\r')
+      .replace(/\\\\/g, '\\');
+    
+    console.log('🔍 Processing credentials, length:', trimmed.length);
+    console.log('🔍 First 100 chars:', trimmed.substring(0, 100));
     
     // Intentar parsear el JSON
-    return JSON.parse(trimmed);
+    const parsed = JSON.parse(trimmed);
+    
+    // Post-proceso de la clave privada si es necesario
+    if (parsed.private_key && typeof parsed.private_key === 'string') {
+      parsed.private_key = parsed.private_key
+        .replace(/\\n/g, '\n')
+        .replace(/\\\\/g, '\\');
+      console.log('🔑 Private key processed, length:', parsed.private_key.length);
+    }
+    
+    console.log('✅ Service account loaded successfully');
+    return parsed;
   } catch (e) {
     console.error('Error parsing FIREBASE_SERVICE_ACCOUNT:', e);
     console.error('Raw value length:', raw?.length);
