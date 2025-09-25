@@ -1,5 +1,5 @@
 // Test script para verificar configuración de Firebase
-const testUrl = 'https://verificador-34o45qcuo-jona2022-02s-projects.vercel.app/api/public-test';
+const testUrl = 'https://verificador-1i561898f-jona2022-02s-projects.vercel.app/api/public-test';
 
 console.log('🔥 Probando conectividad Firebase en producción...');
 console.log('📍 URL:', testUrl);

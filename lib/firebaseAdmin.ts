@@ -71,6 +71,26 @@ function loadServiceAccountFromRaw(raw?: string) {
       // Validar que tiene los campos requeridos
       if (parsed && typeof parsed === 'object' && 
           parsed.type && parsed.project_id && parsed.private_key && parsed.client_email) {
+        
+        // Post-proceso crítico: arreglar la private_key para ASN.1
+        if (parsed.private_key && typeof parsed.private_key === 'string') {
+          // Asegurarse de que \\n se convierte a \n real
+          parsed.private_key = parsed.private_key
+            .replace(/\\\\n/g, '\n')  // \\\\n -> \n
+            .replace(/\\n/g, '\n')    // \\n -> \n (por si acaso)
+            .replace(/\\\\/g, '\\');  // \\\\ -> \\ (otros escapes)
+          
+          console.log('🔑 Private key fixed for ASN.1');
+          console.log('🔑 Key starts with:', parsed.private_key.substring(0, 30));
+          console.log('🔑 Key length:', parsed.private_key.length);
+          
+          // Validar formato básico de la clave
+          if (!parsed.private_key.includes('-----BEGIN PRIVATE KEY-----') ||
+              !parsed.private_key.includes('-----END PRIVATE KEY-----')) {
+            console.log('⚠️ Private key format warning - missing BEGIN/END markers');
+          }
+        }
+        
         console.log(`✅ Strategy ${i + 1} successful!`);
         console.log('✅ Keys found:', Object.keys(parsed));
         return parsed;
