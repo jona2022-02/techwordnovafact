@@ -17,6 +17,23 @@ const nextConfig: NextConfig = {
     domains: [],
     unoptimized: true
   },
+  // Configuración experimental para Edge Runtime
+  experimental: {
+    serverComponentsExternalPackages: ["firebase-admin"]
+  },
+  // Configuración de webpack para manejar Node.js modules
+  webpack: (config: any, { isServer }: { isServer: boolean }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        child_process: false
+      };
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

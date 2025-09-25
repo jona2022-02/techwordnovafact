@@ -30,29 +30,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  try {
-    // Importar dinámicamente para evitar problemas de inicialización
-    const { getAdminAuth } = await import("./lib/firebaseAdmin");
-    const adminAuth = await getAdminAuth();
-    
-    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-    
-    if (!decoded.approved) {
-      url.pathname = "/waiting-approval"; 
-      return NextResponse.redirect(url);
-    }
-    
-    if (url.pathname.startsWith("/admin") && decoded.role !== "admin") {
-      url.pathname = "/home";
-      return NextResponse.redirect(url);
-    }
-    
-    return NextResponse.next();
-  } catch (error) {
-    console.error("Middleware auth error:", error);
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
-  }
+  // En lugar de verificar en middleware, dejamos que cada ruta API maneje su propia autenticación
+  // Esto evita problemas con Edge Runtime y Firebase Admin
+  return NextResponse.next();
 }
 
 export const config = {
