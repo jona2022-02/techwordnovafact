@@ -16,25 +16,26 @@ function loadServiceAccountFromRaw(raw?: string) {
     let processed = raw.trim();
     
     console.log('🔍 Original length:', processed.length);
-    console.log('🔍 First 200 chars:', processed.substring(0, 200));
+    console.log('🔍 First 100 chars:', processed.substring(0, 100));
+    console.log('🔍 Last 100 chars:', processed.substring(processed.length - 100));
     
-    // Múltiples estrategias de limpieza
-    // 1. Remover comillas externas si están presentes
-    if (processed.startsWith('"') && processed.endsWith('"')) {
-      processed = processed.slice(1, -1);
-      console.log('📝 Removed outer quotes');
-    }
+    // El problema: Vercel está almacenando el JSON con escapes dobles
+    // Ejemplo: {\"type\":\"service_account\",\"project_id\":\"...
+    // Necesitamos convertir \\\" a \" pero cuidadosamente
     
-    // 2. Reemplazar escapes comunes CUIDADOSAMENTE
+    // 1. Primero, manejar los escapes dobles específicos de Vercel
     processed = processed
-      .replace(/\\"/g, '"')     // \" -> "
-      .replace(/\\\\/g, '\\')   // \\\\ -> \\
-      .replace(/\\n/g, '\n')    // \\n -> \n 
-      .replace(/\\t/g, '\t')    // \\t -> \t
-      .replace(/\\r/g, '\r');   // \\r -> \r
+      .replace(/\\\\\"/g, '"')      // \\\" -> " (escape doble de comillas)
+      .replace(/\\\\\\\\/g, '\\\\') // \\\\\\\\ -> \\\\ (escape doble de backslash)
+      .replace(/\\\\n/g, '\\n')     // \\\\n -> \\n (preservar newlines en JSON)
+      .replace(/\\\\r/g, '\\r')     // \\\\r -> \\r (preservar returns)
+      .replace(/\\\\t/g, '\\t');    // \\\\t -> \\t (preservar tabs)
     
-    console.log('🧹 After processing length:', processed.length);
-    console.log('🧹 After processing first 200 chars:', processed.substring(0, 200));
+    console.log('🧹 After unescape, first 100 chars:', processed.substring(0, 100));
+    console.log('🧹 After unescape, last 100 chars:', processed.substring(processed.length - 100));
+    
+    // 2. Limpiar caracteres de control finales si existen
+    processed = processed.replace(/[\r\n]+$/, '');
     
     // 3. Validar que se ve como JSON válido
     if (!processed.startsWith('{') || !processed.endsWith('}')) {
@@ -61,7 +62,7 @@ function loadServiceAccountFromRaw(raw?: string) {
     console.error('❌ Error parsing FIREBASE_SERVICE_ACCOUNT:', e);
     console.error('📝 Raw value length:', raw?.length);
     console.error('📝 Raw value sample (first 200):', raw?.substring(0, 200));
-    console.error('📝 Raw value sample (around pos 159):', raw?.substring(150, 170));
+    console.error('📝 Raw value sample (around error pos):', raw?.substring(150, 170));
     throw new Error("FIREBASE_SERVICE_ACCOUNT inválida: " + (e as Error).message);
   }
 }
