@@ -12,59 +12,81 @@ function loadServiceAccountFromB64(b64?: string) {
 
 function loadServiceAccountFromRaw(raw?: string) {
   if (!raw) return null;
-  try {
-    let processed = raw.trim();
+  
+  console.log('🔍 Raw input analysis:');
+  console.log('  - Length:', raw.length);
+  console.log('  - First char code:', raw.charCodeAt(0));
+  console.log('  - Second char code:', raw.charCodeAt(1));
+  console.log('  - First 50:', raw.substring(0, 50));
+  
+  // Múltiples estrategias de parsing para manejar diferentes formatos de Vercel
+  const strategies = [
+    // Estrategia 1: JSON directo
+    () => {
+      console.log('📝 Trying strategy 1: Direct JSON parse');
+      return JSON.parse(raw.trim());
+    },
     
-    console.log('🔍 Original length:', processed.length);
-    console.log('🔍 First 100 chars:', processed.substring(0, 100));
-    console.log('🔍 Last 100 chars:', processed.substring(processed.length - 100));
-    
-    // El problema: Vercel está almacenando el JSON con escapes dobles
-    // Ejemplo: {\"type\":\"service_account\",\"project_id\":\"...
-    // Necesitamos convertir \\\" a \" pero cuidadosamente
-    
-    // 1. Primero, manejar los escapes dobles específicos de Vercel
-    processed = processed
-      .replace(/\\\\\"/g, '"')      // \\\" -> " (escape doble de comillas)
-      .replace(/\\\\\\\\/g, '\\\\') // \\\\\\\\ -> \\\\ (escape doble de backslash)
-      .replace(/\\\\n/g, '\\n')     // \\\\n -> \\n (preservar newlines en JSON)
-      .replace(/\\\\r/g, '\\r')     // \\\\r -> \\r (preservar returns)
-      .replace(/\\\\t/g, '\\t');    // \\\\t -> \\t (preservar tabs)
-    
-    console.log('🧹 After unescape, first 100 chars:', processed.substring(0, 100));
-    console.log('🧹 After unescape, last 100 chars:', processed.substring(processed.length - 100));
-    
-    // 2. Limpiar caracteres de control finales si existen
-    processed = processed.replace(/[\r\n]+$/, '');
-    
-    // 3. Validar que se ve como JSON válido
-    if (!processed.startsWith('{') || !processed.endsWith('}')) {
-      throw new Error('Processed string does not look like JSON object');
-    }
-    
-    // 4. Intentar parsear
-    const parsed = JSON.parse(processed);
-    console.log('✅ JSON parsed successfully, keys:', Object.keys(parsed));
-    
-    // 5. Validar campos requeridos
-    const requiredFields = ['type', 'project_id', 'private_key_id', 'private_key', 'client_email', 'client_id'];
-    for (const field of requiredFields) {
-      if (!parsed[field]) {
-        throw new Error(`Missing required field: ${field}`);
+    // Estrategia 2: Remover comillas externas y parsear
+    () => {
+      console.log('📝 Trying strategy 2: Remove outer quotes');
+      let cleaned = raw.trim();
+      if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+        cleaned = cleaned.slice(1, -1);
       }
+      return JSON.parse(cleaned);
+    },
+    
+    // Estrategia 3: Unescape simple
+    () => {
+      console.log('📝 Trying strategy 3: Simple unescape');
+      let cleaned = raw.trim()
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\');
+      return JSON.parse(cleaned);
+    },
+    
+    // Estrategia 4: Unescape completo de Vercel
+    () => {
+      console.log('📝 Trying strategy 4: Full Vercel unescape');
+      let cleaned = raw.trim()
+        .replace(/\\\\\"/g, '"')      // \\\" -> "
+        .replace(/\\\\\\\\/g, '\\\\') // \\\\\\\\ -> \\\\
+        .replace(/\\\\n/g, '\\n')     // \\\\n -> \\n 
+        .replace(/\\\\r/g, '\\r')     // \\\\r -> \\r
+        .replace(/\\\\t/g, '\\t');    // \\\\t -> \\t
+      if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+        cleaned = cleaned.slice(1, -1);
+      }
+      cleaned = cleaned.replace(/[\r\n]+$/, '');
+      return JSON.parse(cleaned);
     }
-    
-    console.log('✅ All required fields present');
-    console.log('🔑 Private key length:', parsed.private_key?.length);
-    
-    return parsed;
-  } catch (e) {
-    console.error('❌ Error parsing FIREBASE_SERVICE_ACCOUNT:', e);
-    console.error('📝 Raw value length:', raw?.length);
-    console.error('📝 Raw value sample (first 200):', raw?.substring(0, 200));
-    console.error('📝 Raw value sample (around error pos):', raw?.substring(150, 170));
-    throw new Error("FIREBASE_SERVICE_ACCOUNT inválida: " + (e as Error).message);
+  ];
+  
+  // Intentar cada estrategia
+  for (let i = 0; i < strategies.length; i++) {
+    try {
+      const parsed = strategies[i]();
+      
+      // Validar que tiene los campos requeridos
+      if (parsed && typeof parsed === 'object' && 
+          parsed.type && parsed.project_id && parsed.private_key && parsed.client_email) {
+        console.log(`✅ Strategy ${i + 1} successful!`);
+        console.log('✅ Keys found:', Object.keys(parsed));
+        return parsed;
+      } else {
+        console.log(`⚠️ Strategy ${i + 1} parsed but missing required fields`);
+      }
+    } catch (error) {
+      console.log(`❌ Strategy ${i + 1} failed:`, error instanceof Error ? error.message : 'Unknown error');
+    }
   }
+  
+  // Si todas fallan, lanzar error detallado
+  console.error('🚨 All parsing strategies failed');
+  console.error('📝 Raw value for debugging:');
+  console.error('  - Char codes (first 20):', Array.from(raw.substring(0, 20)).map(c => c.charCodeAt(0)));
+  throw new Error(`FIREBASE_SERVICE_ACCOUNT inválida: todas las estrategias de parsing fallaron`);
 }
 
 function loadServiceAccountFromParts() {
