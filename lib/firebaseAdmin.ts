@@ -13,41 +13,55 @@ function loadServiceAccountFromB64(b64?: string) {
 function loadServiceAccountFromRaw(raw?: string) {
   if (!raw) return null;
   try {
-    let trimmed = raw.trim();
+    let processed = raw.trim();
     
-    // Remover comillas extras si están presentes
-    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
-      trimmed = trimmed.slice(1, -1);
+    console.log('🔍 Original length:', processed.length);
+    console.log('🔍 First 200 chars:', processed.substring(0, 200));
+    
+    // Múltiples estrategias de limpieza
+    // 1. Remover comillas externas si están presentes
+    if (processed.startsWith('"') && processed.endsWith('"')) {
+      processed = processed.slice(1, -1);
+      console.log('📝 Removed outer quotes');
     }
     
-    // Decodificar caracteres escapados más agresivamente
-    trimmed = trimmed
-      .replace(/\\n/g, '\n')
-      .replace(/\\"/g, '"')
-      .replace(/\\t/g, '\t')
-      .replace(/\\r/g, '\r')
-      .replace(/\\\\/g, '\\');
+    // 2. Reemplazar escapes comunes CUIDADOSAMENTE
+    processed = processed
+      .replace(/\\"/g, '"')     // \" -> "
+      .replace(/\\\\/g, '\\')   // \\\\ -> \\
+      .replace(/\\n/g, '\n')    // \\n -> \n 
+      .replace(/\\t/g, '\t')    // \\t -> \t
+      .replace(/\\r/g, '\r');   // \\r -> \r
     
-    console.log('🔍 Processing credentials, length:', trimmed.length);
-    console.log('🔍 First 100 chars:', trimmed.substring(0, 100));
+    console.log('🧹 After processing length:', processed.length);
+    console.log('🧹 After processing first 200 chars:', processed.substring(0, 200));
     
-    // Intentar parsear el JSON
-    const parsed = JSON.parse(trimmed);
-    
-    // Post-proceso de la clave privada si es necesario
-    if (parsed.private_key && typeof parsed.private_key === 'string') {
-      parsed.private_key = parsed.private_key
-        .replace(/\\n/g, '\n')
-        .replace(/\\\\/g, '\\');
-      console.log('🔑 Private key processed, length:', parsed.private_key.length);
+    // 3. Validar que se ve como JSON válido
+    if (!processed.startsWith('{') || !processed.endsWith('}')) {
+      throw new Error('Processed string does not look like JSON object');
     }
     
-    console.log('✅ Service account loaded successfully');
+    // 4. Intentar parsear
+    const parsed = JSON.parse(processed);
+    console.log('✅ JSON parsed successfully, keys:', Object.keys(parsed));
+    
+    // 5. Validar campos requeridos
+    const requiredFields = ['type', 'project_id', 'private_key_id', 'private_key', 'client_email', 'client_id'];
+    for (const field of requiredFields) {
+      if (!parsed[field]) {
+        throw new Error(`Missing required field: ${field}`);
+      }
+    }
+    
+    console.log('✅ All required fields present');
+    console.log('🔑 Private key length:', parsed.private_key?.length);
+    
     return parsed;
   } catch (e) {
-    console.error('Error parsing FIREBASE_SERVICE_ACCOUNT:', e);
-    console.error('Raw value length:', raw?.length);
-    console.error('Raw value start:', raw?.substring(0, 50));
+    console.error('❌ Error parsing FIREBASE_SERVICE_ACCOUNT:', e);
+    console.error('📝 Raw value length:', raw?.length);
+    console.error('📝 Raw value sample (first 200):', raw?.substring(0, 200));
+    console.error('📝 Raw value sample (around pos 159):', raw?.substring(150, 170));
     throw new Error("FIREBASE_SERVICE_ACCOUNT inválida: " + (e as Error).message);
   }
 }

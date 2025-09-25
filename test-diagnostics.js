@@ -1,5 +1,5 @@
 // Test diagnóstico completo
-const diagnosticsUrl = 'https://verificador-7kag0cuqn-jona2022-02s-projects.vercel.app/api/diagnostics';
+const diagnosticsUrl = 'https://verificador-pllemevgq-jona2022-02s-projects.vercel.app/api/diagnostics';
 
 console.log('🔍 Ejecutando diagnóstico completo de Firebase...');
 console.log('📍 URL:', diagnosticsUrl);
