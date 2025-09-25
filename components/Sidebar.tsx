@@ -7,6 +7,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useUserRole } from '@/lib/hooks/useUserRole';
 import { getSidebarItems } from './sidebar-items';
+import MembershipCard from '@/components/membership/MembershipCard';
 import {
   Home,
   FileText,
@@ -192,7 +193,7 @@ export default function Sidebar() {
         {/* Perfil */}
         <motion.div
           variants={itemVariants}
-          className="mb-6 flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3"
+          className="mb-4 flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3"
         >
           {photoURL ? (
             <img
@@ -224,6 +225,17 @@ export default function Sidebar() {
             )}
           </div>
         </motion.div>
+
+        {/* Membresía activa */}
+        <div className="mb-6">
+          {/* Solo mostrar si el usuario está autenticado */}
+          {user && (
+            <div className="mt-2">
+              {/* Card compacta de membresía */}
+              <MembershipCard className="shadow-none border border-blue-500/20 bg-white/5" />
+            </div>
+          )}
+        </div>
 
         {/* Navegación dinámica con stagger */}
         <motion.nav variants={listVariants} initial="hidden" animate="show" className="space-y-1 flex-1">
