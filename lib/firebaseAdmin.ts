@@ -13,10 +13,22 @@ function loadServiceAccountFromB64(b64?: string) {
 function loadServiceAccountFromRaw(raw?: string) {
   if (!raw) return null;
   try {
-    const trimmed = raw.trim();
-    // raw puede ser JSON literal o un string JSON envuelto en comillas
+    let trimmed = raw.trim();
+    
+    // Remover comillas extras si están presentes
+    if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+      trimmed = trimmed.slice(1, -1);
+    }
+    
+    // Decodificar caracteres escapados
+    trimmed = trimmed.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    
+    // Intentar parsear el JSON
     return JSON.parse(trimmed);
   } catch (e) {
+    console.error('Error parsing FIREBASE_SERVICE_ACCOUNT:', e);
+    console.error('Raw value length:', raw?.length);
+    console.error('Raw value start:', raw?.substring(0, 50));
     throw new Error("FIREBASE_SERVICE_ACCOUNT inválida: " + (e as Error).message);
   }
 }
