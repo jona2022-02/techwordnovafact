@@ -174,7 +174,8 @@ export default function Sidebar() {
       variants={asideVariants}
       initial="hidden"
       animate="show"
-      className="w-64 h-screen bg-slate-950 text-white p-4 flex flex-col justify-between border-r border-white/10"
+      className="w-64 h-screen bg-slate-950 text-white p-4 flex flex-col border-r border-white/10 overflow-y-auto scrollbar-thin scrollbar-thumb-blue-400/30 scrollbar-track-transparent"
+      style={{ maxHeight: '100vh' }}
     >
       <div>
         {/* Marca */}
