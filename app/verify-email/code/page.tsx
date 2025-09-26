@@ -286,38 +286,27 @@ export default function VerifyCodePage() {
                 </Button>
               </form>
 
-              {/* Error */}
-              <AnimatePresence>
-                {error && (
-                    <Input
-                      id="verification-code"
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      placeholder="123456"
-                      value={code}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/\D/g, '').slice(0, 6);
-                        setCode(value);
-                        setError(null);
-                      }}
-                      disabled={verifying}
-                      className="pl-9 text-center text-3xl tracking-[0.5em] font-mono text-white placeholder:text-slate-400 caret-blue-300 bg-white/10 border-2 border-blue-400/30 rounded-xl py-4 focus-visible:ring-2 focus-visible:ring-blue-400 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                      maxLength={6}
-                      autoComplete="one-time-code"
-                      style={{ letterSpacing: '0.5em' }}
-                    />
+              {/* Error y reenvío */}
+              <div>
+                <AnimatePresence>
+                  {error ? (
+                    <div className="text-red-400 text-sm text-center mt-2">{error}</div>
                   ) : (
-                    <>
+                    <Button
+                      type="button"
+                      onClick={sendVerificationCode}
+                      disabled={cooldown > 0 || sending}
+                      className="w-full mt-2"
+                      variant="outline"
+                    >
                       <RefreshCcw className="mr-2 h-4 w-4" />
                       Reenviar código{cooldown > 0 ? ` (${cooldown}s)` : ""}
-                    </>
+                    </Button>
                   )}
-                </Button>
-
+                </AnimatePresence>
                 {/* Barra de progreso del cooldown */}
                 {cooldown > 0 && (
-                  <div className="space-y-1">
+                  <div className="space-y-1 mt-2">
                     <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
                       <div
                         className="h-full bg-gradient-to-r from-blue-400/70 to-cyan-300/70 transition-all duration-1000"
@@ -326,24 +315,24 @@ export default function VerifyCodePage() {
                     </div>
                   </div>
                 )}
+              </div>
 
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handleLogout}
-                    variant="ghost"
-                    className="w-full text-red-300 hover:text-white"
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Cerrar sesión
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleLogout}
+                  variant="ghost"
+                  className="w-full text-red-300 hover:text-white"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Cerrar sesión
+                </Button>
+
+                <Link href="/login" className="w-full">
+                  <Button variant="ghost" className="w-full">
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Volver
                   </Button>
-
-                  <Link href="/login" className="w-full">
-                    <Button variant="ghost" className="w-full">
-                      <ArrowLeft className="mr-2 h-4 w-4" />
-                      Volver
-                    </Button>
-                  </Link>
-                </div>
+                </Link>
               </div>
             </CardContent>
           </Card>

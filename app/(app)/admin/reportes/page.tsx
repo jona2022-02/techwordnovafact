@@ -12,27 +12,13 @@ import Loader from '@/components/Loader';
 import { ProcesoDTE } from '@/types/procesosDte';
 import {
     Search,
-    FileText,
-    Calendar,
-    User,
-    Clock,
     CheckCircle,
     AlertCircle,
     BarChart3,
-    Users,
-    ArrowLeft,
-    TrendingUp,
-    Activity,
     Filter,
-    Download,
     RefreshCw,
-    Eye,
-    ChevronRight,
-    UserCheck,
     Database,
     FileUp,
-    Hash,
-    ExternalLink,
     X
 } from 'lucide-react';
 
@@ -62,49 +48,25 @@ const formatDuration = (ms: number): string => {
 
 const formatDate = (date: any): string => {
     try {
-        // Manejar diferentes tipos de fecha
         let dateObj: Date;
-        
-        if (!date) {
-            return 'N/A';
-        }
-        
-        if (date instanceof Date) {
-            dateObj = date;
-        } else if (typeof date === 'string') {
-            dateObj = new Date(date);
-        } else if (date.toDate && typeof date.toDate === 'function') {
-            // Firestore Timestamp
-            dateObj = date.toDate();
-        } else if (date.seconds) {
-            // Formato timestamp con seconds/nanoseconds
-            dateObj = new Date(date.seconds * 1000 + (date.nanoseconds || 0) / 1000000);
-        } else {
-            console.warn('Formato de fecha no reconocido:', date);
-            return 'Fecha inválida';
-        }
-        
-        // Verificar si la fecha es válida
-        if (isNaN(dateObj.getTime())) {
-            console.warn('Fecha inválida:', date);
-            return 'Fecha inválida';
-        }
-        
+        if (!date) return 'N/A';
+        if (date instanceof Date) dateObj = date;
+        else if (typeof date === 'string') dateObj = new Date(date);
+        else if (date.toDate && typeof date.toDate === 'function') dateObj = date.toDate();
+        else if (date.seconds) dateObj = new Date(date.seconds * 1000 + (date.nanoseconds || 0) / 1000000);
+        else return 'Fecha inválida';
+        if (isNaN(dateObj.getTime())) return 'Fecha inválida';
         return new Intl.DateTimeFormat('es-SV', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
         }).format(dateObj);
     } catch (error) {
-        console.error('Error formateando fecha:', error, date);
         return 'Error en fecha';
     }
 };
 
 export default function ReportesPage() {
+    const [currentPage, setCurrentPage] = useState(1);
     const { user, loading: authLoading } = useAuth();
     const [procesos, setProcesos] = useState<ProcesoDTE[]>([]);
     const [estadisticas, setEstadisticas] = useState<Estadisticas | null>(null);
@@ -119,20 +81,44 @@ export default function ReportesPage() {
     });
     const [showFilters, setShowFilters] = useState(false);
 
+    // Filtrado de procesos
+    const procesosFiltrados = procesos.filter((proceso) => {
+        const searchMatch = !searchTerm ||
+            proceso.userEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            proceso.archivos.some((archivo: string) => archivo.toLowerCase().includes(searchTerm.toLowerCase()));
+        let fechaMatch = true;
+        if (filtros.fechaDesde) {
+            const fechaDesde = new Date(filtros.fechaDesde);
+            fechaMatch = fechaMatch && new Date(proceso.fechaHora) >= fechaDesde;
+        }
+        if (filtros.fechaHasta) {
+            const fechaHasta = new Date(filtros.fechaHasta);
+            fechaHasta.setHours(23, 59, 59, 999);
+            fechaMatch = fechaMatch && new Date(proceso.fechaHora) <= fechaHasta;
+        }
+        const userMatch = !filtros.userId || proceso.userId === filtros.userId;
+        const exitoMatch = !filtros.soloExitosos || proceso.exito;
+        return searchMatch && fechaMatch && userMatch && exitoMatch;
+    });
+
+    // Paginación
+    const pageSize = 10;
+    const totalPages = Math.ceil(procesosFiltrados.length / pageSize);
+    const paginatedProcesos = procesosFiltrados.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+    // Resetear página al cambiar filtros
+    useEffect(() => { setCurrentPage(1); }, [searchTerm, filtros.fechaDesde, filtros.fechaHasta, filtros.userId, filtros.soloExitosos]);
+
     useEffect(() => {
         if (!user || authLoading) return;
-
-        // Verificar si es administrador
         if (!user.role || user.role !== 'admin') {
             setError('No tienes permisos para ver esta página');
             setLoading(false);
             return;
         }
-
         loadProcesos();
     }, [user, authLoading]);
 
-    // Efecto para recargar datos cuando cambien los filtros del servidor
     useEffect(() => {
         if (user && !authLoading && user.role === 'admin') {
             loadProcesos();
@@ -143,42 +129,27 @@ export default function ReportesPage() {
         try {
             setLoading(true);
             setError(null);
-
-            // Obtener el token del usuario autenticado
-            if (!auth) {
-                throw new Error('Auth no está inicializado');
-            }
+            if (!auth) throw new Error('Auth no está inicializado');
             const user = auth.currentUser;
-            if (!user) {
-                throw new Error('Usuario no autenticado');
-            }
-
+            if (!user) throw new Error('Usuario no autenticado');
             const token = await user.getIdToken();
-
-            // Construir parámetros de consulta
             const params = new URLSearchParams();
             if (filtros.fechaDesde) params.append('fechaDesde', filtros.fechaDesde);
             if (filtros.fechaHasta) params.append('fechaHasta', filtros.fechaHasta);
             if (filtros.userId) params.append('userId', filtros.userId);
             if (filtros.soloExitosos) params.append('soloExitosos', 'true');
             params.append('limite', '100');
-
             const response = await fetch(`/api/admin/procesos-dte?${params.toString()}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
             });
-
-            if (!response.ok) {
-                throw new Error('Error al cargar los procesos DTE');
-            }
-
+            if (!response.ok) throw new Error('Error al cargar los procesos DTE');
             const data = await response.json();
             setProcesos(data.procesos || []);
             setEstadisticas(data.estadisticas || null);
         } catch (error) {
-            console.error('Error loading procesos:', error);
             setError('Error al cargar los procesos DTE. Por favor, intenta nuevamente.');
         } finally {
             setLoading(false);
@@ -195,35 +166,6 @@ export default function ReportesPage() {
         setSearchTerm('');
     };
 
-    // Filtrar procesos
-    const procesosFiltrados = procesos.filter(proceso => {
-        // Filtro de búsqueda
-        const searchMatch = !searchTerm || 
-            proceso.userEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            proceso.archivos.some(archivo => archivo.toLowerCase().includes(searchTerm.toLowerCase()));
-        
-        // Filtro por fechas
-        let fechaMatch = true;
-        if (filtros.fechaDesde) {
-            const fechaDesde = new Date(filtros.fechaDesde);
-            fechaMatch = fechaMatch && new Date(proceso.fechaHora) >= fechaDesde;
-        }
-        if (filtros.fechaHasta) {
-            const fechaHasta = new Date(filtros.fechaHasta);
-            fechaHasta.setHours(23, 59, 59, 999); // Incluir todo el día
-            fechaMatch = fechaMatch && new Date(proceso.fechaHora) <= fechaHasta;
-        }
-        
-        // Filtro por usuario
-        const userMatch = !filtros.userId || proceso.userId === filtros.userId;
-        
-        // Filtro solo exitosos
-        const exitoMatch = !filtros.soloExitosos || proceso.exito;
-        
-        return searchMatch && fechaMatch && userMatch && exitoMatch;
-    });
-
-    // Calcular estadísticas dinámicas basadas en procesos filtrados
     const estadisticasFiltradas = useMemo(() => {
         const totalProcesos = procesosFiltrados.length;
         const procesosExitosos = procesosFiltrados.filter(p => p.exito).length;
@@ -231,7 +173,6 @@ export default function ReportesPage() {
         const totalResultados = procesosFiltrados.reduce((sum, p) => sum + p.cantidadResultados, 0);
         const promedioArchiviosPorProceso = totalProcesos > 0 ? totalArchivos / totalProcesos : 0;
         const ultimoProceso = procesosFiltrados.length > 0 ? procesosFiltrados[0].fechaHora : undefined;
-
         return {
             totalProcesos,
             procesosExitosos,
@@ -439,45 +380,58 @@ export default function ReportesPage() {
                     </CardContent>
                 </Card>
 
-                {/* Filtros y Borrado Masivo */}
-                <Card className="mb-8 border-0 shadow-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-                    <CardContent className="p-6">
-                        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-                            <div className="flex flex-col md:flex-row gap-4 items-center">
-                                <Label className="text-sm font-medium">Borrado masivo:</Label>
-                                <Input
-                                    type="date"
-                                    value={filtros.fechaDesde}
-                                    onChange={e => setFiltros(prev => ({ ...prev, fechaDesde: e.target.value }))}
-                                    className="max-w-[160px]"
-                                />
-                                <span className="text-xs text-gray-400">a</span>
-                                <Input
-                                    type="date"
-                                    value={filtros.fechaHasta}
-                                    onChange={e => setFiltros(prev => ({ ...prev, fechaHasta: e.target.value }))}
-                                    className="max-w-[160px]"
-                                />
-                                <Input
-                                    placeholder="Email del cliente (opcional)"
-                                    value={filtros.userId}
-                                    onChange={e => setFiltros(prev => ({ ...prev, userId: e.target.value }))}
-                                    className="max-w-xs"
-                                />
+                {/* Tabla de historial de procesos DTE */}
+                <Card className="mb-8 border-0 shadow-lg bg-white/90 dark:bg-gray-800/90">
+                    <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-100 dark:bg-gray-700">
+                                    <tr>
+                                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-200">Fecha</th>
+                                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-200">Usuario</th>
+                                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-200">Tipo</th>
+                                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-200">Archivos</th>
+                                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-200">Éxito</th>
+                                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 dark:text-gray-200">Duración</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white dark:bg-gray-800">
+                                    {paginatedProcesos.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={6} className="px-4 py-6 text-center text-gray-400">No hay procesos para mostrar.</td>
+                                        </tr>
+                                    ) : (
+                                        paginatedProcesos.map((proceso) => (
+                                            <tr key={proceso.id} className="border-b last:border-b-0 border-gray-100 dark:border-gray-700">
+                                                <td className="px-4 py-2 whitespace-nowrap text-xs">{formatDate(proceso.fechaHora)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-xs">{proceso.userEmail}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-xs">{getVerificationTypeLabel(proceso.tipoVerificacion)}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-xs">{proceso.cantidadArchivos}</td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-xs">
+                                                    {proceso.exito ? (
+                                                        <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400"><CheckCircle className="inline h-4 w-4" />Sí</span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 text-red-500 dark:text-red-400"><AlertCircle className="inline h-4 w-4" />No</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-2 whitespace-nowrap text-xs">{formatDuration(proceso.duracionMs)}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        {/* Paginador */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-center gap-2 py-4">
+                                <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>&lt;</Button>
+                                <span className="text-xs text-gray-700 dark:text-gray-200">Página {currentPage} de {totalPages}</span>
+                                <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>&gt;</Button>
                             </div>
-                            <div className="flex gap-2">
-                                <Button
-                                    variant="destructive"
-                                    onClick={async () => {
-                                        if (!window.confirm('¿Seguro que deseas borrar TODOS los procesos filtrados? Esta acción no se puede deshacer.')) return;
-                                        setLoading(true);
-                                        setError(null);
-                                        try {
-                                            // Llama a tu endpoint de borrado masivo aquí
-                                            const user = auth.currentUser;
-                                            if (!user) throw new Error('Usuario no autenticado');
-                                            const token = await user.getIdToken();
-                                            const params = new URLSearchParams();
-                                            if (filtros.fechaDesde) params.append('fechaDesde', filtros.fechaDesde);
-                                            if (filtros.fechaHasta) params.append('fechaHasta', filtros.fechaHasta);
-                                            if
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+        </div>
+    );
+}
