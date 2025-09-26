@@ -33,7 +33,6 @@ export default function ResetPasswordPage() {
   const canSubmitCode = useMemo(() => {
     return code.trim().length === 6 && !loading;
   }, [code, loading]);
-
   const canSubmitPassword = useMemo(() => {
     return password.length >= 6 && password === confirmPassword && !loading;
   }, [password, confirmPassword, loading]);
@@ -72,8 +71,6 @@ export default function ResetPasswordPage() {
     } catch (err: any) {
       setError(err.message);
       toast.error(err.message);
-    } finally {
-      setLoading(false);
     }
   };
 

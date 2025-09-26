@@ -439,166 +439,45 @@ export default function ReportesPage() {
                     </CardContent>
                 </Card>
 
-                {/* Tabla de Procesos DTE */}
-                <Card className="border-0 shadow-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-                    <CardHeader className="pb-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <CardTitle className="text-2xl font-bold flex items-center gap-3">
-                                    <Database className="h-6 w-6 text-blue-500" />
-                                    Historial de Procesos DTE
-                                </CardTitle>
-                                <CardDescription className="text-base mt-2">
-                                    Registro completo de todas las verificaciones DTE realizadas en la plataforma
-                                </CardDescription>
+                {/* Filtros y Borrado Masivo */}
+                <Card className="mb-8 border-0 shadow-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
+                    <CardContent className="p-6">
+                        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                            <div className="flex flex-col md:flex-row gap-4 items-center">
+                                <Label className="text-sm font-medium">Borrado masivo:</Label>
+                                <Input
+                                    type="date"
+                                    value={filtros.fechaDesde}
+                                    onChange={e => setFiltros(prev => ({ ...prev, fechaDesde: e.target.value }))}
+                                    className="max-w-[160px]"
+                                />
+                                <span className="text-xs text-gray-400">a</span>
+                                <Input
+                                    type="date"
+                                    value={filtros.fechaHasta}
+                                    onChange={e => setFiltros(prev => ({ ...prev, fechaHasta: e.target.value }))}
+                                    className="max-w-[160px]"
+                                />
+                                <Input
+                                    placeholder="Email del cliente (opcional)"
+                                    value={filtros.userId}
+                                    onChange={e => setFiltros(prev => ({ ...prev, userId: e.target.value }))}
+                                    className="max-w-xs"
+                                />
                             </div>
-                            <Badge variant="secondary" className="text-lg px-4 py-2">
-                                {procesosFiltrados.length} proceso{procesosFiltrados.length !== 1 ? 's' : ''}
-                            </Badge>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {procesosFiltrados.length === 0 ? (
-                            <div className="text-center py-16">
-                                <div className="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <Database className="h-12 w-12 text-gray-400" />
-                                </div>
-                                <p className="text-xl font-medium text-gray-500 dark:text-gray-400 mb-2">
-                                    {searchTerm ? 'No se encontraron procesos' : 'No hay procesos registrados'}
-                                </p>
-                                <p className="text-gray-400 dark:text-gray-500">
-                                    {searchTerm ? 'Intenta con otro criterio de búsqueda' : 'Los procesos aparecerán aquí cuando los usuarios realicen verificaciones'}
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="rounded-md border overflow-hidden">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700">
-                                            <tr>
-                                                <th className="text-left p-4 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-                                                    <div className="flex items-center gap-2">
-                                                        <Calendar className="w-3 h-3" />
-                                                        Fecha y Hora
-                                                    </div>
-                                                </th>
-                                                <th className="text-left p-4 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-                                                    <div className="flex items-center gap-2">
-                                                        <User className="w-3 h-3" />
-                                                        Usuario
-                                                    </div>
-                                                </th>
-                                                <th className="text-center p-4 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-                                                    <div className="flex items-center gap-2 justify-center">
-                                                        <FileUp className="w-3 h-3" />
-                                                        Archivos
-                                                    </div>
-                                                </th>
-                                                <th className="text-center p-4 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-                                                    <div className="flex items-center gap-2 justify-center">
-                                                        <Hash className="w-3 h-3" />
-                                                        Resultados
-                                                    </div>
-                                                </th>
-
-                                                <th className="text-center p-4 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-                                                    <div className="flex items-center gap-2 justify-center">
-                                                        <Clock className="w-3 h-3" />
-                                                        Duración
-                                                    </div>
-                                                </th>
-                                                <th className="text-center p-4 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-                                                    <div className="flex items-center gap-2 justify-center">
-                                                        <Activity className="w-3 h-3" />
-                                                        Estado
-                                                    </div>
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-border">
-                                            {procesosFiltrados.map((proceso, index) => (
-                                                <tr
-                                                    key={proceso.id}
-                                                    className="hover:bg-muted/50 transition-colors"
-                                                >
-                                                    <td className="p-4 text-sm">
-                                                        <div>
-                                                            <div className="font-semibold text-gray-900 dark:text-white">
-                                                                {formatDate(proceso.fechaHora)}
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    
-                                                    <td className="p-4 text-sm">
-                                                        <div>
-                                                            <div className="font-medium text-gray-900 dark:text-white">
-                                                                {proceso.userEmail}
-                                                            </div>
-                                                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                                {proceso.archivos.length > 0 && proceso.archivos[0]}
-                                                                {proceso.archivos.length > 1 && ` +${proceso.archivos.length - 1} más`}
-                                                            </div>
-                                                        </div>
-                                                    </td>
-
-                                                    <td className="p-4 text-center">
-                                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300">
-                                                            {proceso.cantidadArchivos}
-                                                        </Badge>
-                                                    </td>
-
-                                                    <td className="p-4 text-center">
-                                                        <div className="space-y-1">
-                                                            <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300">
-                                                                {proceso.cantidadResultados}
-                                                            </Badge>
-                                                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                                E:{proceso.resultados.emitidos} R:{proceso.resultados.rechazados} A:{proceso.resultados.anulados}
-                                                            </div>
-                                                        </div>
-                                                    </td>
-
-
-
-                                                    <td className="p-4 text-center">
-                                                        <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300">
-                                                            {formatDuration(proceso.duracionMs)}
-                                                        </Badge>
-                                                    </td>
-
-                                                    <td className="p-4 text-center">
-                                                        <Badge
-                                                            variant="outline"
-                                                            className={proceso.exito
-                                                                ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300'
-                                                                : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300'
-                                                            }
-                                                        >
-                                                            <div className="flex items-center gap-1">
-                                                                {proceso.exito ? (
-                                                                    <CheckCircle className="w-3 h-3" />
-                                                                ) : (
-                                                                    <AlertCircle className="w-3 h-3" />
-                                                                )}
-                                                                {proceso.exito ? 'Exitoso' : 'Error'}
-                                                            </div>
-                                                        </Badge>
-                                                        {!proceso.exito && proceso.errorMessage && (
-                                                            <div className="text-xs text-red-600 dark:text-red-400 mt-1 max-w-xs truncate" title={proceso.errorMessage}>
-                                                                {proceso.errorMessage}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
-        </div>
-    );
-}
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="destructive"
+                                    onClick={async () => {
+                                        if (!window.confirm('¿Seguro que deseas borrar TODOS los procesos filtrados? Esta acción no se puede deshacer.')) return;
+                                        setLoading(true);
+                                        setError(null);
+                                        try {
+                                            // Llama a tu endpoint de borrado masivo aquí
+                                            const user = auth.currentUser;
+                                            if (!user) throw new Error('Usuario no autenticado');
+                                            const token = await user.getIdToken();
+                                            const params = new URLSearchParams();
+                                            if (filtros.fechaDesde) params.append('fechaDesde', filtros.fechaDesde);
+                                            if (filtros.fechaHasta) params.append('fechaHasta', filtros.fechaHasta);
+                                            if

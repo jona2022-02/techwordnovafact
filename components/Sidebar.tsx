@@ -80,7 +80,7 @@ export default function Sidebar() {
       verificadorChildren.push({ href: '/verificadorDTE/verificador', label: 'Verificador Links' });
     }
     if (hasPermission('verificador-codigo-fecha')) {
-      verificadorChildren.push({ href: '/verificadorDTE/verificarodyfecha', label: 'Verificador Código y Fecha' });
+      verificadorChildren.push({ href: '/verificadorDTE/verificadorcodigoyfecha', label: 'Verificador Código y Fecha' });
     }
     if (hasPermission('verificador-json')) {
       verificadorChildren.push({ href: '/verificadorDTE/verificadorjson', label: 'Verificador JSON' });

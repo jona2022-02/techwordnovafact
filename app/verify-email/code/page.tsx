@@ -35,13 +35,13 @@ export default function VerifyCodePage() {
   const email = user?.email ?? "tu@correo.com";
 
   useEffect(() => {
+    if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (!u) {
         router.replace("/login");
         return;
       }
-      
       // Si ya está verificado, redirigir
       await u.reload();
       if (u.emailVerified) {
@@ -136,7 +136,9 @@ export default function VerifyCodePage() {
   };
 
   const handleLogout = async () => {
-    await auth.signOut();
+    if (auth) {
+      await auth.signOut();
+    }
     router.replace("/login");
   };
 
@@ -287,31 +289,24 @@ export default function VerifyCodePage() {
               {/* Error */}
               <AnimatePresence>
                 {error && (
-                  <motion.p
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    role="alert"
-                    className="text-center text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-3"
-                  >
-                    {error}
-                  </motion.p>
-                )}
-              </AnimatePresence>
-
-              {/* Acciones adicionales */}
-              <div className="space-y-3">
-                <Button
-                  onClick={sendVerificationCode}
-                  disabled={sending || cooldown > 0}
-                  variant="secondary"
-                  className="w-full"
-                >
-                  {sending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Enviando...
-                    </>
+                    <Input
+                      id="verification-code"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="123456"
+                      value={code}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                        setCode(value);
+                        setError(null);
+                      }}
+                      disabled={verifying}
+                      className="pl-9 text-center text-3xl tracking-[0.5em] font-mono text-white placeholder:text-slate-400 caret-blue-300 bg-white/10 border-2 border-blue-400/30 rounded-xl py-4 focus-visible:ring-2 focus-visible:ring-blue-400 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                      maxLength={6}
+                      autoComplete="one-time-code"
+                      style={{ letterSpacing: '0.5em' }}
+                    />
                   ) : (
                     <>
                       <RefreshCcw className="mr-2 h-4 w-4" />

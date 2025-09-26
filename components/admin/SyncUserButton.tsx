@@ -47,39 +47,27 @@ export function SyncUserButton() {
   };
 
   return (
-    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-      <div className="flex flex-col space-y-2">
-        <p className="text-sm text-yellow-800">
-          <strong>¿Cambiaste tu rol desde la base de datos?</strong>
-          <br />
-          Sincroniza tus permisos para ver los cambios.
-        </p>
-        
-        <Button
-          onClick={handleSync}
-          disabled={loading || !user}
-          className="w-full"
-          variant="outline"
-        >
-          {loading ? (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              Sincronizando...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Sincronizar Permisos
-            </>
-          )}
-        </Button>
-        
-        {message && (
-          <p className={`text-sm ${message.includes('Error') ? 'text-red-600' : 'text-green-600'}`}>
-            {message}
-          </p>
+    <div className="flex flex-col items-center gap-2 py-2">
+      <Button
+        onClick={handleSync}
+        disabled={loading || !user}
+        className="rounded-full px-5 py-2 shadow-sm font-semibold bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+      >
+        {loading ? (
+          <>
+            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+            Sincronizando...
+          </>
+        ) : (
+          <>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Sincronizar Permisos
+          </>
         )}
-      </div>
+      </Button>
+      {message && (
+        <span className={`text-sm ${message.includes('Error') ? 'text-red-600' : 'text-green-600'}`}>{message}</span>
+      )}
     </div>
   );
 }

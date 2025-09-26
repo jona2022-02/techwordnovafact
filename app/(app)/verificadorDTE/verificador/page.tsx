@@ -160,6 +160,7 @@ export default function VerificadorPage() {
 
     const inicioTiempo = Date.now()
 
+
     try {
       const fd = new FormData()
       selectedFiles.forEach(f => fd.append('files', f))
@@ -167,22 +168,35 @@ export default function VerificadorPage() {
       const res = await fetch('/api/procesar', { method: 'POST', body: fd })
       if (!res.ok) throw new Error(await res.text() || 'Error al procesar')
 
-      const json = await res.json() as { resultados: Resultado[]; excelBase64: string; filename?: string }
+      const json = await res.json() as {
+        resultados: Resultado[]
+        filename?: string
+        downloadUrl?: string
+        excelBase64?: string
+      }
+
       setData(json.resultados || [])
       setFilename(json.filename || 'resultados_dtes.xlsx')
 
-      const href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${json.excelBase64}`
-      setDownloadHref(href)
+      if (json.downloadUrl) {
+        setDownloadHref(json.downloadUrl)
+      } else if (json.excelBase64) {
+        const href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${json.excelBase64}`
+        setDownloadHref(href)
+      } else {
+        setDownloadHref(null)
+      }
 
       // Calcular estadísticas para guardar el proceso
       const duracionMs = Date.now() - inicioTiempo
       const resultados = json.resultados || []
       
-      const emitidos = resultados.filter(r => r.estado === 'EMITIDO').length
-      const anulados = resultados.filter(r => r.estado === 'ANULADO').length
-      const rechazados = resultados.filter(r => r.estado === 'RECHAZADO').length
-      const invalidados = resultados.filter(r => r.estado === 'INVALIDADO').length
-      const errores = resultados.filter(r => r.error && r.error.trim() !== '').length
+  const emitidos = resultados.filter(r => r.estado === 'EMITIDO').length
+  const anulados = resultados.filter(r => r.estado === 'ANULADO').length
+  const rechazados = resultados.filter(r => r.estado === 'RECHAZADO').length
+  const invalidados = resultados.filter(r => r.estado === 'INVALIDADO').length
+  const desconocidos = resultados.filter(r => r.estado === 'DESCONOCIDO').length
+  const errores = resultados.filter(r => r.error && r.error.trim() !== '').length
 
       // Guardar el proceso en la base de datos si el usuario está autenticado
       console.log('🔍 Verificando autenticación - user:', !!user, 'firebaseUser:', !!firebaseUser)
@@ -202,6 +216,7 @@ export default function VerificadorPage() {
               anulados,
               rechazados,
               invalidados,
+              desconocidos,
               errores
             },
             duracionMs,
@@ -328,15 +343,16 @@ export default function VerificadorPage() {
   ] as const), [])
 
   // Estadísticas mejoradas
-  const stats = useMemo(() => {
-    const emitidos = data.filter(r => r.estado === 'EMITIDO').length
-    const anulados = data.filter(r => r.estado === 'ANULADO').length
-    const rechazados = data.filter(r => r.estado === 'RECHAZADO').length
-    const invalidados = data.filter(r => r.estado === 'INVALIDADO').length
-    const errores = data.filter(r => r.error && r.error.trim() !== '').length
-    
-    return { emitidos, anulados, rechazados, invalidados, errores, total: data.length }
-  }, [data])
+      const stats = useMemo(() => {
+        const emitidos = data.filter(r => r.estado === 'EMITIDO').length
+        const anulados = data.filter(r => r.estado === 'ANULADO').length
+        const rechazados = data.filter(r => r.estado === 'RECHAZADO').length
+        const invalidados = data.filter(r => r.estado === 'INVALIDADO').length
+        const desconocidos = data.filter(r => r.estado === 'DESCONOCIDO').length
+        const errores = data.filter(r => r.error && r.error.trim() !== '').length
+        
+        return { emitidos, anulados, rechazados, invalidados, desconocidos, errores, total: data.length }
+      }, [data])
 
   // filtro por búsqueda y filtros avanzados
   const filtered = useMemo(() => {
@@ -428,7 +444,7 @@ export default function VerificadorPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+  <div className="container mx-auto p-6 space-y-6 bg-[#eaf3fb] dark:bg-[#181a20] min-h-screen transition-colors">
       {/* Header */}
       <div className="space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">Verificador DTE por CSV</h1>
@@ -465,12 +481,12 @@ export default function VerificadorPage() {
                     <label className="cursor-pointer text-primary underline underline-offset-4 hover:text-primary/80">
                       selecciona archivos
                       <input 
-                        ref={inputRef} 
-                        className="sr-only" 
-                        type="file" 
-                        accept=".csv" 
-                        multiple 
-                        onChange={onFileInput} 
+                        ref={inputRef}
+                        className="sr-only"
+                        type="file"
+                        accept=".csv"
+                        multiple
+                        onChange={onFileInput}
                         disabled={loading}
                       />
                     </label>
@@ -633,317 +649,135 @@ export default function VerificadorPage() {
 
       {/* Statistics Cards Mejoradas */}
       {data.length > 0 && (
-        <div className="space-y-4">
-          {/* Información del procesamiento por lotes (cuando aplica) */}
-          {data.length >= 50 && (
-            <Card className="bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <Activity className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div className="space-y-2 flex-1">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-medium text-blue-900 dark:text-blue-100">
-                        Procesamiento por Lotes Optimizado
-                      </h3>
-                      <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-300">
-                        {data.length} consultas
-                      </Badge>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                      <div className="space-y-1">
-                        <p className="text-blue-800 dark:text-blue-200 font-medium">Archivos procesados</p>
-                        <p className="text-blue-600 dark:text-blue-400">{selectedFiles.length} archivos CSV</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-blue-800 dark:text-blue-200 font-medium">Método utilizado</p>
-                        <p className="text-blue-600 dark:text-blue-400">Lotes de 15 consultas</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-blue-800 dark:text-blue-200 font-medium">Tiempo estimado</p>
-                        <p className="text-blue-600 dark:text-blue-400">{Math.ceil(data.length / 15) * 2} segundos aprox.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Estadísticas principales */}
-          <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4 text-blue-500" />
-                  <div className="space-y-1">
-                    <p className="text-2xl font-bold">{stats.total}</p>
-                    <p className="text-xs text-muted-foreground">Total procesados</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                  <div className="space-y-1">
-                    <p className="text-2xl font-bold text-green-600">{stats.emitidos}</p>
-                    <p className="text-xs text-muted-foreground">Emitidos</p>
-                    {stats.total > 0 && (
-                      <p className="text-xs text-green-500">
-                        {((stats.emitidos / stats.total) * 100).toFixed(1)}%
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <XCircle className="w-4 h-4 text-red-500" />
-                  <div className="space-y-1">
-                    <p className="text-2xl font-bold text-red-600">{stats.rechazados}</p>
-                    <p className="text-xs text-muted-foreground">Rechazados</p>
-                    {stats.total > 0 && (
-                      <p className="text-xs text-red-500">
-                        {((stats.rechazados / stats.total) * 100).toFixed(1)}%
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                  <div className="space-y-1">
-                    <p className="text-2xl font-bold text-yellow-600">{stats.anulados}</p>
-                    <p className="text-xs text-muted-foreground">Anulados</p>
-                    {stats.total > 0 && (
-                      <p className="text-xs text-yellow-500">
-                        {((stats.anulados / stats.total) * 100).toFixed(1)}%
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <XCircle className="w-4 h-4 text-purple-500" />
-                  <div className="space-y-1">
-                    <p className="text-2xl font-bold text-purple-600">{stats.invalidados}</p>
-                    <p className="text-xs text-muted-foreground">Invalidados</p>
-                    {stats.total > 0 && (
-                      <p className="text-xs text-purple-500">
-                        {((stats.invalidados / stats.total) * 100).toFixed(1)}%
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-orange-500" />
-                  <div className="space-y-1">
-                    <p className="text-2xl font-bold text-orange-600">{stats.errores}</p>
-                    <p className="text-xs text-muted-foreground">Errores</p>
-                    {stats.total > 0 && (
-                      <p className="text-xs text-orange-500">
-                        {((stats.errores / stats.total) * 100).toFixed(1)}%
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+        <div className="grid grid-cols-2 lg:grid-cols-7 gap-4 mb-6">
+          {[
+            {label: 'Total procesados', value: stats.total, icon: <Database className="w-4 h-4 text-blue-500" />},
+            {label: 'Emitidos', value: stats.emitidos, icon: <CheckCircle className="w-4 h-4 text-green-500" />, color: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'},
+            {label: 'Rechazados', value: stats.rechazados, icon: <XCircle className="w-4 h-4 text-red-500" />, color: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'},
+            {label: 'Anulados', value: stats.anulados, icon: <AlertTriangle className="w-4 h-4 text-yellow-500" />, color: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'},
+            {label: 'Invalidados', value: stats.invalidados, icon: <XCircle className="w-4 h-4 text-purple-500" />, color: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'},
+            {label: 'Desconocidos', value: stats.desconocidos, icon: <AlertTriangle className="w-4 h-4 text-gray-500" />, color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'},
+            {label: 'Errores', value: stats.errores, icon: <AlertTriangle className="w-4 h-4 text-orange-500" />, color: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'},
+          ].map((item, idx) => (
+            <div key={item.label} className={`rounded-xl p-4 flex flex-col items-center shadow-sm ${item.color || 'bg-white dark:bg-[#23262f]'}`}>
+              <div className="mb-2">{item.icon}</div>
+              <div className="text-2xl font-bold">{item.value}</div>
+              <div className="text-xs font-medium mt-1">{item.label}</div>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Results Table */}
+      {/* Tabla de resultados */}
       {data.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  Resultados de Verificación DTE
-                </CardTitle>
-                <CardDescription>
-                  {filtered.length} de {data.length} documentos procesados
-                </CardDescription>
+  <Card className="mt-6 bg-[#f0f6fa] dark:bg-[#23262f] border border-[#d2e3ef] dark:border-[#23262f] shadow-sm">
+          <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Resultados de la verificación
+              </CardTitle>
+              <CardDescription>
+                Visualiza, filtra y exporta los resultados de los DTE procesados
+              </CardDescription>
+            </div>
+            <div className="flex flex-col md:flex-row gap-2 md:items-center">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Buscar..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-10 w-48"
+                  disabled={data.length === 0}
+                />
               </div>
-
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="flex flex-1 gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar documentos..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="shrink-0"
-                  >
-                    <SlidersHorizontal className="w-4 h-4 mr-2" />
-                    Filtros
-                    {activeFiltersCount > 0 && (
-                      <Badge variant="secondary" className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs">
-                        {activeFiltersCount}
-                      </Badge>
-                    )}
-                  </Button>
-
-                  {activeFiltersCount > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearFilters}
-                      className="shrink-0"
-                    >
-                      <X className="w-4 h-4 mr-1" />
-                      Limpiar
-                    </Button>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="pageSize" className="text-sm whitespace-nowrap">
-                    Mostrar:
-                  </Label>
+              <Button
+                type="button"
+                variant={showFilters ? 'default' : 'outline'}
+                className={`flex items-center gap-2 rounded-full px-4 py-2 shadow-sm font-semibold transition-colors ${showFilters ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-white dark:bg-[#23262f] text-blue-700 dark:text-blue-200 border border-[#d2e3ef] dark:border-[#23262f] hover:bg-blue-50 dark:hover:bg-[#23262f]'}`}
+                onClick={() => setShowFilters(v => !v)}
+                disabled={data.length === 0}
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                Filtros
+                {activeFiltersCount > 0 && (
+                  <Badge variant="secondary" className="ml-1 text-xs px-1.5 py-0.5">
+                    {activeFiltersCount}
+                  </Badge>
+                )}
+              </Button>
+            </div>
+            {/* Filtros avanzados */}
+            {showFilters && (
+              <div className="w-full mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 bg-[#e3eef7] dark:bg-[#23262f] p-4 rounded-lg border border-[#d2e3ef] dark:border-[#23262f]">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Estado</Label>
                   <select
-                    id="pageSize"
-                    value={rowsPerPage}
-                    onChange={(e) => {
-                      setRowsPerPage(Number(e.target.value))
-                      setCurrentPage(1)
-                    }}
-                    className="h-9 w-20 rounded-md border border-input bg-background px-3 py-1 text-sm"
+                    className="w-full border rounded px-2 py-1"
+                    value={filters.estado}
+                    onChange={e => setFilters(prev => ({ ...prev, estado: e.target.value }))}
                   >
-                    {[10, 20, 50, 100].map(size => (
-                      <option key={size} value={size}>{size}</option>
+                    <option value="">Todos</option>
+                    {uniqueValues.estados.map(e => (
+                      <option key={e} value={e}>{e}</option>
                     ))}
                   </select>
                 </div>
-              </div>
-            </div>
-
-            {/* Panel de Filtros */}
-            {showFilters && (
-              <div className="mt-4 p-4 border rounded-lg bg-muted/30">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {/* Filtro por Estado */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Estado</Label>
-                    <select
-                      value={filters.estado}
-                      onChange={(e) => setFilters(prev => ({ ...prev, estado: e.target.value }))}
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-                    >
-                      <option value="">Todos los estados</option>
-                      {uniqueValues.estados.map(estado => (
-                        <option key={estado} value={estado}>
-                          {estado}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Filtro por Tipo DTE */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Tipo DTE</Label>
-                    <select
-                      value={filters.tipoDte}
-                      onChange={(e) => setFilters(prev => ({ ...prev, tipoDte: e.target.value }))}
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-                    >
-                      <option value="">Todos los tipos</option>
-                      {uniqueValues.tiposDte.map(tipo => (
-                        <option key={tipo} value={tipo}>
-                          {tipo} - {
-                            tipo === '01' ? 'Factura' :
-                            tipo === '03' ? 'Crédito Fiscal' :
-                            tipo === '04' ? 'Nota de Remisión' :
-                            tipo === '05' ? 'Nota de Crédito' :
-                            tipo === '06' ? 'Nota de Débito' :
-                            'Documento'
-                          }
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Filtro por Ambiente */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Ambiente</Label>
-                    <select
-                      value={filters.ambiente}
-                      onChange={(e) => setFilters(prev => ({ ...prev, ambiente: e.target.value }))}
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
-                    >
-                      <option value="">Todos</option>
-                      <option value="00">00 - Pruebas</option>
-                      <option value="01">01 - Producción</option>
-                    </select>
-                  </div>
-
-                  {/* Checkbox Solo Errores */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Filtros especiales</Label>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="conErrores"
-                        checked={filters.conErrores}
-                        onChange={(e) => setFilters(prev => ({ ...prev, conErrores: e.target.checked }))}
-                        className="h-4 w-4 rounded border-input"
-                      />
-                      <Label htmlFor="conErrores" className="text-sm">Solo con errores</Label>
-                    </div>
-                  </div>
-
-                  {/* Filtro Fecha Desde */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Fecha desde</Label>
-                    <Input
-                      type="date"
-                      value={filters.fechaDesde}
-                      onChange={(e) => setFilters(prev => ({ ...prev, fechaDesde: e.target.value }))}
-                    />
-                  </div>
-
-                  {/* Filtro Fecha Hasta */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Fecha hasta</Label>
-                    <Input
-                      type="date"
-                      value={filters.fechaHasta}
-                      onChange={(e) => setFilters(prev => ({ ...prev, fechaHasta: e.target.value }))}
-                    />
-                  </div>
-
-
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Tipo DTE</Label>
+                  <select
+                    className="w-full border rounded px-2 py-1"
+                    value={filters.tipoDte}
+                    onChange={e => setFilters(prev => ({ ...prev, tipoDte: e.target.value }))}
+                  >
+                    <option value="">Todos</option>
+                    {uniqueValues.tiposDte.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
                 </div>
-
-                <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Ambiente</Label>
+                  <select
+                    className="w-full border rounded px-2 py-1"
+                    value={filters.ambiente}
+                    onChange={e => setFilters(prev => ({ ...prev, ambiente: e.target.value }))}
+                  >
+                    <option value="">Todos</option>
+                    {uniqueValues.ambientes.map(a => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Fecha desde</Label>
+                  <Input
+                    type="date"
+                    value={filters.fechaDesde}
+                    onChange={e => setFilters(prev => ({ ...prev, fechaDesde: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Fecha hasta</Label>
+                  <Input
+                    type="date"
+                    value={filters.fechaHasta}
+                    onChange={e => setFilters(prev => ({ ...prev, fechaHasta: e.target.value }))}
+                  />
+                </div>
+                <div className="flex items-center gap-2 mt-4">
+                  <input
+                    type="checkbox"
+                    id="conErrores"
+                    checked={filters.conErrores}
+                    onChange={e => setFilters(prev => ({ ...prev, conErrores: e.target.checked }))}
+                    className="accent-blue-500 dark:accent-blue-400 w-4 h-4 rounded border border-[#b6c6d6] dark:border-[#444b5a] focus:ring-2 focus:ring-blue-400 transition-all"
+                  />
+                  <Label htmlFor="conErrores" className="text-sm text-[#2a3a4d] dark:text-[#eaf3fb]">Solo con errores</Label>
+                </div>
+                <div className="flex justify-end gap-2 mt-4 pt-4 border-t col-span-full">
                   <Button variant="outline" onClick={clearFilters} size="sm">
                     <X className="w-4 h-4 mr-1" />
                     Limpiar todos
@@ -955,20 +789,16 @@ export default function VerificadorPage() {
               </div>
             )}
           </CardHeader>
-
           <CardContent>
             <div className="rounded-md border overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-muted/50">
+                  <thead className="bg-[#eaf3fb] dark:bg-[#23262f]">
                     <tr>
-                      {columnas.map((col) => {
+                      {columnas.map(col => {
                         const Icon = col.icon
                         return (
-                          <th
-                            key={col.key}
-                            className="text-left p-4 font-medium text-muted-foreground text-xs uppercase tracking-wider"
-                          >
+                          <th key={col.key} className="text-left p-4 font-medium text-muted-foreground text-xs uppercase tracking-wider">
                             <div className="flex items-center gap-2">
                               <Icon className="w-3 h-3" />
                               {col.label}
@@ -978,7 +808,7 @@ export default function VerificadorPage() {
                       })}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody className="divide-y divide-[#d2e3ef] dark:divide-[#23262f]">
                     {paginatedData.length === 0 ? (
                       <tr>
                         <td colSpan={columnas.length} className="p-8 text-center text-muted-foreground">
@@ -994,29 +824,17 @@ export default function VerificadorPage() {
                       </tr>
                     ) : (
                       paginatedData.map((resultado, index) => (
-                        <tr
-                          key={resultado.codGen || index}
-                          className="hover:bg-muted/50 transition-colors"
-                        >
-                          {columnas.map((col) => {
+                        <tr key={resultado.codGen || index} className="hover:bg-[#e0ecf7] dark:hover:bg-[#23262f] transition-colors">
+                          {columnas.map(col => {
                             const valor = (resultado as any)[col.key] || ''
-                            
                             return (
                               <td key={col.key} className="p-4 text-sm">
                                 {col.key === 'estado' ? (
-                                  <Badge 
-                                    variant="outline" 
-                                    className={getEstadoBadgeVariant(valor)}
-                                  >
+                                  <Badge variant="outline" className={getEstadoBadgeVariant(valor)}>
                                     {valor}
                                   </Badge>
                                 ) : col.key === 'visitar' && (resultado.linkVisita || resultado.url) ? (
-                                  <Button
-                                    asChild
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8"
-                                  >
+                                  <Button asChild variant="outline" size="sm" className="h-8">
                                     <a
                                       href={resultado.linkVisita || resultado.url}
                                       target="_blank"
@@ -1045,8 +863,7 @@ export default function VerificadorPage() {
                   </tbody>
                 </table>
               </div>
-
-              {/* Pagination */}
+              {/* Paginación */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t bg-background">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1057,38 +874,17 @@ export default function VerificadorPage() {
                       ({((currentPage - 1) * rowsPerPage) + 1}-{Math.min(currentPage * rowsPerPage, filtered.length)} de {filtered.length})
                     </span>
                   </div>
-
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(1)}
-                      disabled={currentPage === 1}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
                       <ChevronsLeft className="w-4 h-4" />
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>
                       <ChevronLeft className="w-4 h-4" />
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      disabled={currentPage === totalPages}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>
                       <ChevronRight className="w-4 h-4" />
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(totalPages)}
-                      disabled={currentPage === totalPages}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}>
                       <ChevronsRight className="w-4 h-4" />
                     </Button>
                   </div>

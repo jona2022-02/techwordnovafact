@@ -311,11 +311,11 @@ export default function VerificadorJSONPage() {
     { key: 'receptorCorreo', label: 'Correo', icon: Users, category: 'receptor' },
     { key: 'receptorDireccion', label: 'Dirección', icon: Users, category: 'receptor' },
 
-    // Totales / error
+   
     { key: 'montoTotal', label: 'Monto Total', icon: DollarSign, category: 'general' },
     { key: 'error', label: 'Error', icon: AlertCircle, category: 'general' },
 
-    // Link
+   
     { key: 'visitar', label: 'Acción', icon: ExternalLink, category: 'general' },
   ] as const), [])
 
@@ -469,9 +469,10 @@ export default function VerificadorJSONPage() {
     const rechazados = filtered.filter(r => r.estado === 'RECHAZADO').length
     const anulados = filtered.filter(r => r.estado === 'ANULADO').length
     const invalidados = filtered.filter(r => r.estado === 'INVALIDADO').length
+    const desconocidos = filtered.filter(r => r.estado === 'DESCONOCIDO').length
     const errores = filtered.filter(r => r.error).length
     
-    return { emitidos, rechazados, anulados, invalidados, errores, total: filtered.length }
+    return { emitidos, rechazados, anulados, invalidados, desconocidos, errores, total: filtered.length }
   }, [filtered])
 
   const getEstadoBadgeVariant = (estado?: string) => {
@@ -490,7 +491,7 @@ export default function VerificadorJSONPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-6 space-y-6 bg-[#eaf3fb] dark:bg-[#181a20] min-h-screen transition-colors">
       {/* Header */}
       <div className="space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">Verificador DTE por JSON</h1>
@@ -500,7 +501,7 @@ export default function VerificadorJSONPage() {
       </div>
 
       {/* Upload Section */}
-      <Card className="border-2 border-dashed border-muted-foreground/25 hover:border-muted-foreground/50 transition-colors">
+  <Card className="border-2 border-dashed border-[#d2e3ef] dark:border-muted-foreground/25 hover:border-[#bfc2d1] dark:hover:border-muted-foreground/50 bg-[#f0f6fa] dark:bg-[#23262f] transition-colors">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5" />

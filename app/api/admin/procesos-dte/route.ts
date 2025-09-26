@@ -1,3 +1,71 @@
+// Handler DELETE para borrado masivo de procesos DTE
+export async function DELETE(request: NextRequest) {
+  try {
+    // Verificar autenticación
+    const authResult = await authenticate(request);
+    if (authResult.error) {
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    }
+
+    const { user } = authResult;
+    if (!user) {
+      return NextResponse.json({ error: 'Usuario no autenticado' }, { status: 401 });
+    }
+
+    // Verificar si es administrador
+    try {
+      const userProfile = await RolesService.getUserProfile(user.uid);
+      if (!userProfile || userProfile.role !== 'admin') {
+        return NextResponse.json({ error: 'Acceso denegado - Se requiere rol de administrador' }, { status: 403 });
+      }
+    } catch (roleError: any) {
+      return NextResponse.json({ error: 'Error verificando permisos' }, { status: 500 });
+    }
+
+    // Leer filtros del body (JSON)
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch (e) {
+      return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 });
+    }
+    const { userId, fechaDesde, fechaHasta } = body;
+
+    // Construir query para borrar documentos
+    const adminDb = await (await import('@/lib/firebaseAdmin')).getAdminDb();
+    const collectionRef = adminDb.collection('procesosdtes');
+    let queryRef: any = collectionRef;
+    if (userId) {
+      queryRef = queryRef.where('userId', '==', userId);
+    }
+    if (fechaDesde) {
+      queryRef = queryRef.where('fechaHora', '>=', new Date(fechaDesde));
+    }
+    if (fechaHasta) {
+      queryRef = queryRef.where('fechaHora', '<=', new Date(fechaHasta));
+    }
+
+    // Obtener documentos a borrar
+    const snapshot = await queryRef.get();
+    const batch = adminDb.batch();
+    let count = 0;
+    snapshot.docs.forEach((doc: any) => {
+      batch.delete(doc.ref);
+      count++;
+    });
+    if (count === 0) {
+      return NextResponse.json({ deleted: 0, message: 'No se encontraron procesos para borrar.' });
+    }
+    await batch.commit();
+    return NextResponse.json({ deleted: count, message: `Se eliminaron ${count} procesos.` });
+  } catch (error: any) {
+    console.error('❌ Error en DELETE admin/procesos-dte:', error);
+    return NextResponse.json(
+      { error: 'Error interno del servidor', details: error.message },
+      { status: 500 }
+    );
+  }
+}
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminAuth } from '@/lib/firebaseAdmin';
 import { procesosDteService } from '@/lib/procesosDteService';
